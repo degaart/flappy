@@ -55,6 +55,8 @@ private:
     SDL_AppResult onEvent(SDL_Event* event);
     SDL_AppResult onIterate();
     void onQuit(SDL_AppResult result);
+
+    void setDrawColor(glm::vec3 color);
 };
 
 #ifdef MAIN_CPP

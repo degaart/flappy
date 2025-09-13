@@ -229,7 +229,7 @@ SDL_AppResult Engine::onEvent(SDL_Event* event)
 
 SDL_AppResult Engine::onIterate()
 {
-    SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 0xFF);
+    setDrawColor({0.39f, 0.58f, 0.93f});
     SDL_RenderClear(_renderer);
 
     SDL_LockSurface(_backbuffer);
@@ -240,8 +240,33 @@ SDL_AppResult Engine::onIterate()
     }
     SDL_UnlockSurface(_backbuffer);
 
+    int gameWidth, gameHeight;
+    gameWidth = _backbuffer->w;
+    gameHeight = _backbuffer->h;
+
+    int windowWidth, windowHeight;
+    SDL_GetRenderOutputSize(_renderer, &windowWidth, &windowHeight);
+
+    SDL_FRect dstRc;
+    dstRc.w = gameWidth;
+    dstRc.h = gameHeight;
+
+    if (((float)windowWidth / windowHeight) > ((float)gameWidth / gameHeight))
+    {
+        dstRc.h = windowHeight;
+        dstRc.w = (dstRc.h * gameWidth) / gameHeight;
+    }
+    else
+    {
+        dstRc.w = windowWidth;
+        dstRc.h = (dstRc.w * gameHeight) / gameWidth;
+    }
+
+    dstRc.x = (windowWidth - dstRc.w) / 2.0f;
+    dstRc.y = (windowHeight - dstRc.h) / 2.0f;
+
     SDL_Texture* tex = SDL_CreateTextureFromSurface(_renderer, _backbuffer);
-    SDL_RenderTexture(_renderer, tex, nullptr, nullptr);
+    SDL_RenderTexture(_renderer, tex, nullptr, &dstRc);
     SDL_DestroyTexture(tex);
 
     uint64_t now = SDL_GetTicks();
@@ -258,7 +283,8 @@ SDL_AppResult Engine::onIterate()
     char debugText[512];
     snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
     SDL_SetRenderClipRect(_renderer, nullptr);
-    SDL_SetRenderDrawColor(_renderer, 0x7F, 0x00, 0xFF, 0xFF);
+    SDL_SetRenderDrawColor(_renderer, 0x7F, 0x7F, 0x7F, 0xFF);
+    setDrawColor({1.0f, 1.0f, 0.25f});
     SDL_RenderDebugText(_renderer, 10.0f, 10.0f, debugText);
 
     SDL_RenderPresent(_renderer);
@@ -276,10 +302,8 @@ const Keystate& Engine::keyState() const
     return _keyState;
 }
 
-static void blit8(const uint8_t* srcPixels, int srcWidth, int srcHeight, int srcPitch,
-                  uint8_t* dstPixels, int dstWidth, int dstHeight, int dstPitch,
-                  int srcX, int srcY, int blitWidth, int blitHeight,
-                  int dstX, int dstY)
+static void blit8(const uint8_t* srcPixels, int srcWidth, int srcHeight, int srcPitch, uint8_t* dstPixels, int dstWidth, int dstHeight, int dstPitch, int srcX,
+                  int srcY, int blitWidth, int blitHeight, int dstX, int dstY)
 {
     if (blitWidth <= 0 || blitHeight <= 0)
     {
@@ -346,14 +370,14 @@ static void blit8(const uint8_t* srcPixels, int srcWidth, int srcHeight, int src
     }
 }
 
-void Engine::blit(const Bitmap& bmp,
-              int srcX, int srcY, int srcW, int srcH,
-              int dstX, int dstY)
+void Engine::blit(const Bitmap& bmp, int srcX, int srcY, int srcW, int srcH, int dstX, int dstY)
 {
-    blit8(bmp.data.data(),
-          bmp.w, bmp.h, bmp.w,
-          (uint8_t*)_backbuffer->pixels, _backbuffer->w, _backbuffer->h, _backbuffer->pitch,
-          srcX, srcY, srcW, srcH,
-          dstX, dstY);
+    blit8(bmp.data.data(), bmp.w, bmp.h, bmp.w, (uint8_t*)_backbuffer->pixels, _backbuffer->w, _backbuffer->h, _backbuffer->pitch, srcX, srcY, srcW, srcH, dstX,
+          dstY);
+}
+
+void Engine::setDrawColor(glm::vec3 color)
+{
+    SDL_SetRenderDrawColor(_renderer, std::round(color.r * 255.0f), std::round(color.g * 255.0f), std::round(color.b * 255.0f), 0xFF);
 }
 
