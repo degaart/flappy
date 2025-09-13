@@ -186,41 +186,6 @@ SDL_AppResult Engine::onInit()
         return SDL_APP_FAILURE;
     }
 
-#if 0
-    /*
-     * reserved indices:
-     * 0: black
-     * 255: white
-     * 1 - 9: reserved
-     * 246 - 254: reserved
-     */
-    auto palette = _game->getPalette();
-    if (palette.size() != 256)
-    {
-        fprintf(stderr, "Invalid palette: invalid number of colors: %zu\n", palette.size());
-        return SDL_APP_FAILURE;
-    }
-    else if (palette[0].r != 0.0f || palette[0].g != 0.0f || palette[0].b != 0.0f || palette[255].r != 1.0f || palette[255].g != 1.0f || palette[255].b != 1.0f)
-    {
-        fprintf(stderr, "Invalid palette: reserved colors were not respected\n");
-        return SDL_APP_FAILURE;
-    }
-
-    for (int i = 0; i < 255; i++)
-    {
-        pal->colors[i].r = std::round(palette[i].r * 255.0f);
-        pal->colors[i].g = std::round(palette[i].g * 255.0f);
-        pal->colors[i].b = std::round(palette[i].b * 255.0f);
-    }
-#endif
-
-    // auto image = loadBitmap("doge.raw", 640, 480);
-    // if (!image)
-    //{
-    //     return SDL_APP_FAILURE;
-    // }
-    //_background = std::move(*image);
-
     _game = new Game;
     if (!_game->onInit(*this))
     {
@@ -311,16 +276,84 @@ const Keystate& Engine::keyState() const
     return _keyState;
 }
 
-void Engine::blit(const Bitmap& bmp, int x, int y, int w, int h)
+static void blit8(const uint8_t* srcPixels, int srcWidth, int srcHeight, int srcPitch,
+                  uint8_t* dstPixels, int dstWidth, int dstHeight, int dstPitch,
+                  int srcX, int srcY, int blitWidth, int blitHeight,
+                  int dstX, int dstY)
 {
-    const uint8_t* srcPtr = bmp.data.data();
-    uint8_t* dstPtr = (uint8_t*)_backbuffer->pixels;
-    assert(_backbuffer->format == SDL_PIXELFORMAT_INDEX8);
-    for (int j = 0; j < _backbuffer->h; j++)
+    if (blitWidth <= 0 || blitHeight <= 0)
     {
-        memcpy(dstPtr, srcPtr, bmp.w);
-        dstPtr += _backbuffer->pitch;
-        srcPtr += bmp.w;
+        return;
     }
+
+    // Clip source rect
+    if (srcX < 0)
+    {
+        blitWidth += srcX;
+        dstX -= srcX;
+        srcX = 0;
+    }
+    if (srcY < 0)
+    {
+        blitHeight += srcY;
+        dstY -= srcY;
+        srcY = 0;
+    }
+    if (srcX + blitWidth > srcWidth)
+    {
+        blitWidth = srcWidth - srcX;
+    }
+    if (srcY + blitHeight > srcHeight)
+    {
+        blitHeight = srcHeight - srcY;
+    }
+
+    // Clip dest rect
+    if (dstX < 0)
+    {
+        blitWidth += dstX;
+        srcX -= dstX;
+        dstX = 0;
+    }
+    if (dstY < 0)
+    {
+        blitHeight += dstY;
+        srcY -= dstY;
+        dstY = 0;
+    }
+    if (dstX + blitWidth > dstWidth)
+    {
+        blitWidth = dstWidth - dstX;
+    }
+    if (dstY + blitHeight > dstHeight)
+    {
+        blitHeight = dstHeight - dstY;
+    }
+
+    if (blitWidth <= 0 || blitHeight <= 0)
+    {
+        return;
+    }
+
+    const uint8_t* srcRow = srcPixels + srcY * srcPitch + srcX;
+    uint8_t* dstRow = dstPixels + dstY * dstPitch + dstX;
+
+    for (int y = 0; y < blitHeight; ++y)
+    {
+        memcpy(dstRow, srcRow, blitWidth);
+        srcRow += srcPitch;
+        dstRow += dstPitch;
+    }
+}
+
+void Engine::blit(const Bitmap& bmp,
+              int srcX, int srcY, int srcW, int srcH,
+              int dstX, int dstY)
+{
+    blit8(bmp.data.data(),
+          bmp.w, bmp.h, bmp.w,
+          (uint8_t*)_backbuffer->pixels, _backbuffer->w, _backbuffer->h, _backbuffer->pitch,
+          srcX, srcY, srcW, srcH,
+          dstX, dstY);
 }
 

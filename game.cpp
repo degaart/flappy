@@ -27,7 +27,7 @@ bool Game::onUpdate(Engine& engine, double dT)
 
 bool Game::onRender(Engine& engine)
 {
-    engine.blit(_doge, 0, 0, _doge.w, _doge.h);
+    engine.blit(_doge, 0, 0, _doge.w, _doge.h, 0, 0);
     return true;
 }
 
