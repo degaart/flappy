@@ -1,0 +1,29 @@
+---
+BasedOnStyle: LLVM
+AccessModifierOffset: -4
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+BreakBeforeBraces: Allman
+BreakTemplateDeclarations: Yes
+ColumnLimit: 160
+CompactNamespaces: true
+IndentPPDirectives: AfterHash
+IndentWidth: 4
+InsertNewlineAtEOF: true
+KeepEmptyLines:
+  AtEndOfFile: true
+LineEnding: LF
+PackConstructorInitializers: NextLineOnly
+PointerAlignment: Left
+Standard: c++17
+TabWidth: 4
+Language: Cpp
+KeepEmptyLinesAtEOF: true
+NamespaceIndentation: All
+SortIncludes: CaseSensitive
+AlignConsecutiveMacros:
+  Enabled: true
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+SpaceBeforeCpp11BracedList: true
+
