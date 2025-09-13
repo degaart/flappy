@@ -16,13 +16,6 @@ set(BUILD_SHARED_LIBS OFF)
 ### dependencies
 include(FetchContent)
 
-# fmt
-FetchContent_Declare(
-    fmt
-    URL https://github.com/fmtlib/fmt/releases/download/11.2.0/fmt-11.2.0.zip
-)
-FetchContent_MakeAvailable(fmt)
-
 # SDL3
 FetchContent_Declare(
     sdl3
@@ -52,7 +45,6 @@ endif()
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
-        fmt
         SDL3::SDL3
         glm::glm
 )
