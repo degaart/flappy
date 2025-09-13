@@ -30,18 +30,20 @@ std::optional<Bitmap> loadBitmap(const char* filename, int w, int h)
     size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    Bitmap result;
-    result.w = w;
-    result.h = h;
-    result.data = static_cast<uint8_t*>(malloc(size));
-
-    if (fread(result.data, 1, size, f) != size)
+    auto buffer = static_cast<uint8_t*>(malloc(size));
+    if (fread(buffer, 1, size, f) != size)
     {
         fclose(f);
+        free(buffer);
         fprintf(stderr, "Failed to read file %s\n", filename);
         return std::nullopt;
     }
     fclose(f);
+
+    Bitmap result;
+    result.w = w;
+    result.h = h;
+    result.data = buffer;
 
     return result;
 }
@@ -136,6 +138,11 @@ std::optional<std::vector<uint8_t>> loadPalette(const char* filename)
 
 SDL_AppResult Main::onInit(int argc, char* argv[])
 {
+    _frames = 0;
+    _fpsTimer = 0;
+    _prevTime = 0;
+    _fps = 0;
+
     if (!SDL_CreateWindowAndRenderer("Flappy", 640, 480, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
     {
         fprintf(stderr, "Failed to create window\n");
@@ -145,7 +152,7 @@ SDL_AppResult Main::onInit(int argc, char* argv[])
     int width, height;
     SDL_GetWindowSizeInPixels(_window, &width, &height);
 
-    _backbuffer = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_INDEX8);
+    _backbuffer = SDL_CreateSurface(640, 480, SDL_PIXELFORMAT_INDEX8);
     if (!_backbuffer)
     {
         fprintf(stderr, "Failed to create backbuffer\n");
@@ -162,6 +169,22 @@ SDL_AppResult Main::onInit(int argc, char* argv[])
     auto palette = loadPalette("doge.pal");
     if (!palette)
     {
+        return SDL_APP_FAILURE;
+    }
+    _palette = *palette;
+
+    _palette32.reserve(255);
+    for (int i = 0; i < 255; i++)
+    {
+        uint8_t r = _palette[i * 3];
+        uint8_t g = _palette[(i*3)+1];
+        uint8_t b = _palette[(i*3)+2];
+        _palette32.push_back(b | (g << 8) | (r << 16) | (255 << 24));
+    }
+    _backbufferTexture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_BGRX32, SDL_TEXTUREACCESS_STREAMING, 640, 480);
+    if (!_backbufferTexture)
+    {
+        fprintf(stderr, "Failed to create texture: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
@@ -185,29 +208,7 @@ SDL_AppResult Main::onInit(int argc, char* argv[])
     {
         return SDL_APP_FAILURE;
     }
-
-    if (!SDL_LockSurface(_backbuffer))
-    {
-        fprintf(stderr, "Failed to lock backbuffer\n");
-        return SDL_APP_FAILURE;
-    }
-
-    uint8_t* srcPtr = image->data;
-    uint8_t color = 10;
-    assert(_backbuffer->format == SDL_PIXELFORMAT_INDEX8);
-    for (int j = 0; j < _backbuffer->h; j++)
-    {
-        uint8_t* ptr = static_cast<uint8_t*>(_backbuffer->pixels) + (j * _backbuffer->pitch);
-        for (int i = 0; i < _backbuffer->w; i++)
-        {
-            ptr[i] = *srcPtr;
-            srcPtr++;
-        }
-    }
-    free(image->data);
-
-    SDL_UnlockSurface(_backbuffer);
-
+    _background = std::move(*image);
     return SDL_APP_CONTINUE;
 }
 
@@ -227,10 +228,96 @@ SDL_AppResult Main::onEvent(SDL_Event* event)
 
 SDL_AppResult Main::onIterate()
 {
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(_renderer, _backbuffer);
-    SDL_RenderTexture(_renderer, tex, nullptr, nullptr);
+    //assert(_backbuffer->format == SDL_PIXELFORMAT_INDEX8);
+    //assert(_backbuffer->w == 640);
+    //assert(_backbuffer->h == 480);
+
+    //if (!SDL_LockSurface(_backbuffer))
+    //{
+    //    abort();
+    //}
+    ////uint8_t* dstPtr = static_cast<uint8_t*>(_backbuffer->pixels);
+    ////memset(dstPtr, 10, _backbuffer->pitch * _backbuffer->h);
+    ////const uint8_t* srcPtr = _background.data;
+    ////for (int j = 0; j < _backbuffer->h; j++)
+    ////{
+    ////    uint8_t* line = dstPtr;
+    ////    for (int i = 0; i < _backbuffer->w; i++)
+    ////    {
+    ////        *line = 255;
+    ////        //*line = *srcPtr;
+    ////        srcPtr++;
+    ////        line++;
+    ////    }
+    ////    line += _backbuffer->pitch;
+    ////}
+    //SDL_UnlockSurface(_backbuffer);
+
+    SDL_Surface* surf;
+    if (!SDL_LockTextureToSurface(_backbufferTexture, nullptr, &surf))
+    {
+        abort();
+    }
+    assert(surf->format == SDL_PIXELFORMAT_BGRX32);
+
+    //for (int j = 0; j < surf->h; j++)
+    //{
+    //    uint32_t* line = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(surf->pixels) + (surf->pitch * j));
+    //    for (int i = 0; i < surf->w; i++)
+    //    {
+    //        line[i] = 0xFF7F7F00;
+    //    }
+    //}
+
+    const uint8_t* srcPtr = _background.data;
+    uint8_t* dstPtr = static_cast<uint8_t*>(surf->pixels);
+    for (int j = 0; j < surf->h; j++)
+    {
+        uint32_t* line = reinterpret_cast<uint32_t*>(dstPtr);
+        for (int i = 0; i < surf->w; i++)
+        {
+            int c = *srcPtr;
+            //uint8_t r = _palette[c * 3];
+            //uint8_t g = _palette[(c*3)+1];
+            //uint8_t b = _palette[(c*3)+2];
+            //*line = b | (g << 8) | (r << 16) | (255 << 24);
+            *line = _palette32[c];
+            line++;
+            srcPtr++;
+        }
+        dstPtr += surf->pitch;
+    }
+
+    //if (!SDL_BlitSurface(_backbuffer, nullptr, surf, nullptr))
+    //{
+    //    fprintf(stderr, "BlitSurface failed: %s\n", SDL_GetError());
+    //    abort();
+    //}
+    SDL_UnlockTexture(_backbufferTexture);
+
+    //SDL_Texture* tex = SDL_CreateTextureFromSurface(_renderer, _backbuffer);
+    SDL_RenderTexture(_renderer, _backbufferTexture, nullptr, nullptr);
+    //SDL_DestroyTexture(tex);
+
+
+    uint64_t now = SDL_GetTicks();
+    _frames++;
+    _fpsTimer += now - _prevTime;
+    if (_fpsTimer >= 1000)
+    {
+        _fps = (_frames * 1000) / _fpsTimer;
+        _fpsTimer = 0;
+        _frames = 0;
+    }
+    _prevTime = now;
+
+    char debugText[512];
+    snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
+    SDL_SetRenderClipRect(_renderer, nullptr);
+    SDL_SetRenderDrawColor(_renderer, 0x7F, 0x00, 0xFF, 0xFF);
+    SDL_RenderDebugText(_renderer, 10.0f, 10.0f, debugText);
+
     SDL_RenderPresent(_renderer);
-    SDL_DestroyTexture(tex);
     return SDL_APP_CONTINUE;
 }
 
