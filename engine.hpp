@@ -4,6 +4,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <SDL3/SDL.h>
+#include <string>
 
 struct Keystate
 {
@@ -31,6 +32,8 @@ class Game;
 class Engine
 {
 public:
+    static constexpr float dT = 1.0f / 60.0f;
+
     void setPalette(const std::vector<glm::vec3>& palette);
     Bitmap loadBitmap(const char* filename, int w, int h);
     static std::vector<glm::vec3> loadPalette(const char* filename);
@@ -38,6 +41,9 @@ public:
     void blit(const Bitmap& bmp,
               int srcX, int srcY, int srcW, int srcH,
               int dstX, int dstY);
+    double getTime() const;
+    void clear();
+    void setDebugText(const char* text);
 
 private:
     SDL_Window* _window;
@@ -46,10 +52,12 @@ private:
     Game* _game;
     SDL_Palette* _palette;
     int _frames;
-    uint64_t _fpsTimer;
-    uint64_t _prevTime;
+    double _fpsTimer;
+    double _prevTime;
+    double _lag;
     int _fps;
     Keystate _keyState;
+    std::string _debugText;
 
     SDL_AppResult onInit();
     SDL_AppResult onEvent(SDL_Event* event);

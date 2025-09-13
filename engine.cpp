@@ -177,9 +177,11 @@ std::vector<glm::vec3> Engine::loadPalette(const char* filename)
 SDL_AppResult Engine::onInit()
 {
     _frames = 0;
-    _fpsTimer = 0;
-    _prevTime = 0;
+    _fpsTimer = 0.0;
+    _prevTime = 0.0;
+    _lag = 0.0;
     _fps = 0;
+
 
     auto size = Game::getGameScreenSize();
     if (!SDL_CreateWindowAndRenderer(Game::getName(), size.x, size.y, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
@@ -250,11 +252,23 @@ SDL_AppResult Engine::onEvent(SDL_Event* event)
 
 SDL_AppResult Engine::onIterate()
 {
+    _debugText.clear();
+
+    auto beginTime = getTime();
+    auto elapsed = beginTime - _prevTime;
+    _lag += elapsed;
+    while (_lag > dT)
+    {
+        _game->onUpdate(*this, dT);
+        _lag -= dT;
+    }
+
     setDrawColor({0.39f, 0.58f, 0.93f});
     SDL_RenderClear(_renderer);
 
     SDL_LockSurface(_backbuffer);
-    if (!_game->onRender(*this))
+    memset(_backbuffer->pixels, 0, _backbuffer->pitch * _backbuffer->h);
+    if (!_game->onRender(*this, _lag / dT))
     {
         fprintf(stderr, "Rendering failed\n");
         abort();
@@ -290,19 +304,18 @@ SDL_AppResult Engine::onIterate()
     SDL_RenderTexture(_renderer, tex, nullptr, &dstRc);
     SDL_DestroyTexture(tex);
 
-    uint64_t now = SDL_GetTicks();
     _frames++;
-    _fpsTimer += now - _prevTime;
-    if (_fpsTimer >= 1000)
+    _fpsTimer += elapsed;
+    if (_fpsTimer >= 1.0)
     {
-        _fps = (_frames * 1000) / _fpsTimer;
+        _fps = _frames / _fpsTimer;
         _fpsTimer = 0;
         _frames = 0;
     }
-    _prevTime = now;
+    _prevTime = beginTime;
 
     char debugText[512];
-    snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
+    snprintf(debugText, sizeof(debugText), "fps=%d %s", _fps, _debugText.c_str());
     SDL_SetRenderClipRect(_renderer, nullptr);
     SDL_SetRenderDrawColor(_renderer, 0x7F, 0x7F, 0x7F, 0xFF);
     setDrawColor({1.0f, 1.0f, 0.25f});
@@ -400,5 +413,19 @@ void Engine::blit(const Bitmap& bmp, int srcX, int srcY, int srcW, int srcH, int
 void Engine::setDrawColor(glm::vec3 color)
 {
     SDL_SetRenderDrawColor(_renderer, std::round(color.r * 255.0f), std::round(color.g * 255.0f), std::round(color.b * 255.0f), 0xFF);
+}
+
+double Engine::getTime() const
+{
+    return SDL_GetTicks() / 1000.0;
+}
+
+void Engine::setDebugText(const char* text)
+{
+    if (!_debugText.empty())
+    {
+        _debugText += " ";
+    }
+    _debugText += text;
 }
 
