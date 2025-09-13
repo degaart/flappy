@@ -2,6 +2,7 @@
 
 #include "game.hpp"
 #include "util.hpp"
+#include "stb_image.h"
 #include <optional>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,30 +41,50 @@ void Engine::setPalette(const std::vector<glm::vec3>& palette)
 
 Bitmap Engine::loadBitmap(const char* filename, int w, int h)
 {
-    FILE* f = fopen(filename, "rb");
-    if (!f)
+    int channels;
+    auto imageData = stbi_load(filename, &w, &h, &channels, 0);
+    if (!imageData)
     {
         fprintf(stderr, "Failed to load file %s\n", filename);
         abort();
     }
 
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
+    /*
+     * imageData is in RGB format
+     * To convert it into palettized format, we use the euclidian distance
+     * in a 3D space to find the nearest color
+     */
     Bitmap result;
     result.w = w;
     result.h = h;
-    result.data.reserve(size);
-
-    if (fread(result.data.data(), 1, size, f) != size)
+    result.data.reserve(w * h);
+    uint8_t* srcPtr = imageData;
+    for (int j = 0; j < h; j++)
     {
-        fclose(f);
-        fprintf(stderr, "Failed to read file %s\n", filename);
-        abort();
-    }
-    fclose(f);
+        for (int i = 0; i < w; i++)
+        {
+            uint8_t r = *srcPtr++;
+            uint8_t g = *srcPtr++;
+            uint8_t b = *srcPtr++;
 
+            int closest = 0;
+            float minDist = FLT_MAX;
+            for (int col = 0; col < 256; col++)
+            {
+                float rDist = r - _palette->colors[col].r;
+                float gDist = g - _palette->colors[col].g;
+                float bDist = b - _palette->colors[col].b;
+                float dist = rDist*rDist + gDist*gDist + bDist*bDist;
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    closest = col;
+                }
+            }
+            result.data.push_back(closest);
+        }
+    }
+    stbi_image_free(imageData);
     return result;
 }
 

@@ -16,7 +16,7 @@ bool Game::onInit(Engine& engine)
     auto palette = engine.loadPalette("doge.pal");
     engine.setPalette(palette);
 
-    _doge = Engine::loadBitmap("doge.raw", 640, 480);
+    _doge = engine.loadBitmap("doge.png", 640, 480);
     return true;
 }
 

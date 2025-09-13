@@ -32,7 +32,7 @@ class Engine
 {
 public:
     void setPalette(const std::vector<glm::vec3>& palette);
-    static Bitmap loadBitmap(const char* filename, int w, int h);
+    Bitmap loadBitmap(const char* filename, int w, int h);
     static std::vector<glm::vec3> loadPalette(const char* filename);
     const Keystate& keyState() const;
     void blit(const Bitmap& bmp,
