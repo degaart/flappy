@@ -35,7 +35,7 @@ public:
     static constexpr float dT = 1.0f / 60.0f;
 
     void setPalette(const std::vector<glm::vec3>& palette);
-    Bitmap loadBitmap(const char* filename, int w, int h);
+    Bitmap loadBitmap(const char* filename);
     static std::vector<glm::vec3> loadPalette(const char* filename);
     const Keystate& keyState() const;
     void blit(const Bitmap& bmp,

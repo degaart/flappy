@@ -39,9 +39,10 @@ void Engine::setPalette(const std::vector<glm::vec3>& palette)
     }
 }
 
-Bitmap Engine::loadBitmap(const char* filename, int w, int h)
+Bitmap Engine::loadBitmap(const char* filename)
 {
     int channels;
+    int w, h;
     auto imageData = stbi_load(filename, &w, &h, &channels, 0);
     if (!imageData)
     {
@@ -182,7 +183,6 @@ SDL_AppResult Engine::onInit()
     _lag = 0.0;
     _fps = 0;
 
-
     auto size = Game::getGameScreenSize();
     if (!SDL_CreateWindowAndRenderer(Game::getName(), size.x, size.y, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
     {
@@ -301,6 +301,7 @@ SDL_AppResult Engine::onIterate()
     dstRc.y = (windowHeight - dstRc.h) / 2.0f;
 
     SDL_Texture* tex = SDL_CreateTextureFromSurface(_renderer, _backbuffer);
+    SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
     SDL_RenderTexture(_renderer, tex, nullptr, &dstRc);
     SDL_DestroyTexture(tex);
 
