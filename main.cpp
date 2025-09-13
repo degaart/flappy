@@ -12,10 +12,12 @@
 #include <string_view>
 #include <vector>
 
+#if 0
 extern "C" const char* __asan_default_options()
 {
     return "detect_leaks=0";
 }
+#endif
 
 std::optional<Bitmap> loadBitmap(const char* filename, int w, int h)
 {
@@ -178,8 +180,8 @@ SDL_AppResult Main::onInit(int argc, char* argv[])
     for (int i = 0; i < 255; i++)
     {
         uint8_t r = _palette[i * 3];
-        uint8_t g = _palette[(i*3)+1];
-        uint8_t b = _palette[(i*3)+2];
+        uint8_t g = _palette[(i * 3) + 1];
+        uint8_t b = _palette[(i * 3) + 2];
         _palette32.push_back(b | (g << 8) | (r << 16) | (255 << 24));
     }
     _backbufferTexture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_BGRX32, SDL_TEXTUREACCESS_STREAMING, 640, 480);
@@ -217,6 +219,8 @@ SDL_AppResult Main::onEvent(SDL_Event* event)
 {
     switch (event->type)
     {
+    case SDL_EVENT_QUIT:
+        return SDL_APP_SUCCESS;
     case SDL_EVENT_KEY_UP:
         if (event->key.key == SDLK_ESCAPE)
         {
@@ -241,7 +245,6 @@ void Main::render1()
     }
     else
     {
-
         uint8_t* srcPtr = (uint8_t*)_background.data;
         uint8_t* dstPtr = (uint8_t*)_backbuffer->pixels;
         assert(_backbuffer->format == SDL_PIXELFORMAT_INDEX8);
@@ -329,6 +332,9 @@ SDL_AppResult Main::onIterate()
 
 void Main::onQuit(SDL_AppResult result)
 {
+    SDL_DestroySurface(_backbuffer);
+    SDL_DestroyTexture(_backbufferTexture);
+    free((void*)_background.data);
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
