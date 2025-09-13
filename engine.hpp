@@ -24,6 +24,10 @@ public:
 
 class Game;
 
+#ifdef MAIN_CPP
+#define private public
+#endif
+
 class Engine
 {
 public:
@@ -35,11 +39,7 @@ public:
               int srcX, int srcY, int srcW, int srcH,
               int dstX, int dstY);
 
-#ifdef MAIN_CPP
-public:
-#else
 private:
-#endif
     SDL_Window* _window;
     SDL_Renderer* _renderer;
     SDL_Surface* _backbuffer;
@@ -57,3 +57,6 @@ private:
     void onQuit(SDL_AppResult result);
 };
 
+#ifdef MAIN_CPP
+#undef private
+#endif
