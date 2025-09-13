@@ -14,6 +14,7 @@ public:
     bool onRender(Engine& engine, float lag);
 private:
     Bitmap _doge;
+    Bitmap _tiles1;
     int _offsetX;
     int _offsetY;
 };

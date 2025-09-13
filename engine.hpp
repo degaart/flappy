@@ -41,6 +41,10 @@ public:
     void blit(const Bitmap& bmp,
               int srcX, int srcY, int srcW, int srcH,
               int dstX, int dstY);
+    void blit(const Bitmap& bmp,
+              int srcX, int srcY, int srcW, int srcH,
+              int dstX, int dstY,
+              uint8_t colorKey);
     double getTime() const;
     void clear();
     void setDebugText(const char* text);

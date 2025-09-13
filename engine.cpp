@@ -337,6 +337,87 @@ const Keystate& Engine::keyState() const
     return _keyState;
 }
 
+static void transparentBlit8(
+    const uint8_t* srcPixels, int srcWidth, int srcHeight, int srcPitch,
+    uint8_t* dstPixels, int dstWidth, int dstHeight, int dstPitch,
+    int srcX, int srcY, int blitWidth, int blitHeight, int dstX, int dstY,
+    uint8_t colorKey
+)
+{
+    if (blitWidth <= 0 || blitHeight <= 0)
+    {
+        return;
+    }
+
+    // Clip source rect
+    if (srcX < 0)
+    {
+        blitWidth += srcX;
+        dstX -= srcX;
+        srcX = 0;
+    }
+    if (srcY < 0)
+    {
+        blitHeight += srcY;
+        dstY -= srcY;
+        srcY = 0;
+    }
+    if (srcX + blitWidth > srcWidth)
+    {
+        blitWidth = srcWidth - srcX;
+    }
+    if (srcY + blitHeight > srcHeight)
+    {
+        blitHeight = srcHeight - srcY;
+    }
+
+    // Clip dest rect
+    if (dstX < 0)
+    {
+        blitWidth += dstX;
+        srcX -= dstX;
+        dstX = 0;
+    }
+    if (dstY < 0)
+    {
+        blitHeight += dstY;
+        srcY -= dstY;
+        dstY = 0;
+    }
+    if (dstX + blitWidth > dstWidth)
+    {
+        blitWidth = dstWidth - dstX;
+    }
+    if (dstY + blitHeight > dstHeight)
+    {
+        blitHeight = dstHeight - dstY;
+    }
+
+    if (blitWidth <= 0 || blitHeight <= 0)
+    {
+        return;
+    }
+
+    const uint8_t* srcRow = srcPixels + srcY * srcPitch + srcX;
+    uint8_t* dstRow = dstPixels + dstY * dstPitch + dstX;
+    for (int y = 0; y < blitHeight; ++y)
+    {
+        auto srcPtr = srcRow;
+        auto dstPtr = dstRow;
+        for (int x = 0; x < blitWidth; x++)
+        {
+            if (*srcPtr != colorKey)
+            {
+                *dstPtr = *srcPtr;
+            }
+            srcPtr++;
+            dstPtr++;
+        }
+        srcRow += srcPitch;
+        dstRow += dstPitch;
+    }
+}
+
 static void blit8(const uint8_t* srcPixels, int srcWidth, int srcHeight, int srcPitch, uint8_t* dstPixels, int dstWidth, int dstHeight, int dstPitch, int srcX,
                   int srcY, int blitWidth, int blitHeight, int dstX, int dstY)
 {
@@ -409,6 +490,15 @@ void Engine::blit(const Bitmap& bmp, int srcX, int srcY, int srcW, int srcH, int
 {
     blit8(bmp.data.data(), bmp.w, bmp.h, bmp.w, (uint8_t*)_backbuffer->pixels, _backbuffer->w, _backbuffer->h, _backbuffer->pitch, srcX, srcY, srcW, srcH, dstX,
           dstY);
+}
+
+void Engine::blit(const Bitmap& bmp,
+          int srcX, int srcY, int srcW, int srcH,
+          int dstX, int dstY,
+          uint8_t colorKey)
+{
+    transparentBlit8(bmp.data.data(), bmp.w, bmp.h, bmp.w, (uint8_t*)_backbuffer->pixels, _backbuffer->w, _backbuffer->h, _backbuffer->pitch, srcX, srcY, srcW, srcH, dstX,
+          dstY, colorKey);
 }
 
 void Engine::setDrawColor(glm::vec3 color)
