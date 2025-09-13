@@ -29,6 +29,10 @@ private:
     uint64_t _fpsTimer;
     uint64_t _prevTime;
     int _fps;
+    int _renderMethod;
+
+    void render1();
+    void render2();
 };
 
 

@@ -142,6 +142,7 @@ SDL_AppResult Main::onInit(int argc, char* argv[])
     _fpsTimer = 0;
     _prevTime = 0;
     _fps = 0;
+    _renderMethod = 0;
 
     if (!SDL_CreateWindowAndRenderer("Flappy", 640, 480, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
     {
@@ -221,53 +222,56 @@ SDL_AppResult Main::onEvent(SDL_Event* event)
         {
             return SDL_APP_SUCCESS;
         }
+        else if (event->key.key == SDLK_SPACE)
+        {
+            _renderMethod = !_renderMethod;
+        }
         break;
     }
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult Main::onIterate()
+void Main::render1()
 {
-    //assert(_backbuffer->format == SDL_PIXELFORMAT_INDEX8);
-    //assert(_backbuffer->w == 640);
-    //assert(_backbuffer->h == 480);
+    SDL_LockSurface(_backbuffer);
 
-    //if (!SDL_LockSurface(_backbuffer))
-    //{
-    //    abort();
-    //}
-    ////uint8_t* dstPtr = static_cast<uint8_t*>(_backbuffer->pixels);
-    ////memset(dstPtr, 10, _backbuffer->pitch * _backbuffer->h);
-    ////const uint8_t* srcPtr = _background.data;
-    ////for (int j = 0; j < _backbuffer->h; j++)
-    ////{
-    ////    uint8_t* line = dstPtr;
-    ////    for (int i = 0; i < _backbuffer->w; i++)
-    ////    {
-    ////        *line = 255;
-    ////        //*line = *srcPtr;
-    ////        srcPtr++;
-    ////        line++;
-    ////    }
-    ////    line += _backbuffer->pitch;
-    ////}
-    //SDL_UnlockSurface(_backbuffer);
+    if (_backbuffer->pitch == _background.w)
+    {
+        memcpy(_backbuffer->pixels, _background.data, _background.w * _background.h);
+    }
+    else
+    {
 
+        uint8_t* srcPtr = (uint8_t*)_background.data;
+        uint8_t* dstPtr = (uint8_t*)_backbuffer->pixels;
+        assert(_backbuffer->format == SDL_PIXELFORMAT_INDEX8);
+        for (int j = 0; j < _backbuffer->h; j++)
+        {
+            uint8_t* line = dstPtr;
+            for (int i = 0; i < _backbuffer->w; i++)
+            {
+                *line = *srcPtr;
+                srcPtr++;
+                line++;
+            }
+            dstPtr += _backbuffer->pitch;
+        }
+    }
+    SDL_UnlockSurface(_backbuffer);
+
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(_renderer, _backbuffer);
+    SDL_RenderTexture(_renderer, tex, nullptr, nullptr);
+    SDL_DestroyTexture(tex);
+}
+
+void Main::render2()
+{
     SDL_Surface* surf;
     if (!SDL_LockTextureToSurface(_backbufferTexture, nullptr, &surf))
     {
         abort();
     }
     assert(surf->format == SDL_PIXELFORMAT_BGRX32);
-
-    //for (int j = 0; j < surf->h; j++)
-    //{
-    //    uint32_t* line = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(surf->pixels) + (surf->pitch * j));
-    //    for (int i = 0; i < surf->w; i++)
-    //    {
-    //        line[i] = 0xFF7F7F00;
-    //    }
-    //}
 
     const uint8_t* srcPtr = _background.data;
     uint8_t* dstPtr = static_cast<uint8_t*>(surf->pixels);
@@ -277,10 +281,6 @@ SDL_AppResult Main::onIterate()
         for (int i = 0; i < surf->w; i++)
         {
             int c = *srcPtr;
-            //uint8_t r = _palette[c * 3];
-            //uint8_t g = _palette[(c*3)+1];
-            //uint8_t b = _palette[(c*3)+2];
-            //*line = b | (g << 8) | (r << 16) | (255 << 24);
             *line = _palette32[c];
             line++;
             srcPtr++;
@@ -288,17 +288,23 @@ SDL_AppResult Main::onIterate()
         dstPtr += surf->pitch;
     }
 
-    //if (!SDL_BlitSurface(_backbuffer, nullptr, surf, nullptr))
-    //{
-    //    fprintf(stderr, "BlitSurface failed: %s\n", SDL_GetError());
-    //    abort();
-    //}
     SDL_UnlockTexture(_backbufferTexture);
-
-    //SDL_Texture* tex = SDL_CreateTextureFromSurface(_renderer, _backbuffer);
     SDL_RenderTexture(_renderer, _backbufferTexture, nullptr, nullptr);
-    //SDL_DestroyTexture(tex);
+}
 
+SDL_AppResult Main::onIterate()
+{
+    SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 0xFF);
+    SDL_RenderClear(_renderer);
+
+    if (_renderMethod == 0)
+    {
+        render1();
+    }
+    else
+    {
+        render2();
+    }
 
     uint64_t now = SDL_GetTicks();
     _frames++;
@@ -312,7 +318,7 @@ SDL_AppResult Main::onIterate()
     _prevTime = now;
 
     char debugText[512];
-    snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
+    snprintf(debugText, sizeof(debugText), "fps=%d rendermethod=%d", _fps, _renderMethod);
     SDL_SetRenderClipRect(_renderer, nullptr);
     SDL_SetRenderDrawColor(_renderer, 0x7F, 0x00, 0xFF, 0xFF);
     SDL_RenderDebugText(_renderer, 10.0f, 10.0f, debugText);
