@@ -184,7 +184,7 @@ SDL_AppResult Engine::onInit()
     _fps = 0;
 
     auto size = Game::getGameScreenSize();
-    if (!SDL_CreateWindowAndRenderer(Game::getName(), size.x, size.y, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
+    if (!SDL_CreateWindowAndRenderer(Game::getName(), size.x * 3, size.y * 3, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
     {
         fprintf(stderr, "Failed to create window\n");
         return SDL_APP_FAILURE;
