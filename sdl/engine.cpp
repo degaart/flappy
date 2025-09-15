@@ -1,11 +1,10 @@
 #include "engine.hpp"
 
-#include "game.hpp"
-#include "util.hpp"
-#include "stb_image.h"
+#include "../game.hpp"
+#include "../util.hpp"
+#include "../stb_image.h"
 #include <optional>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string>
 
 #ifdef WIN32
