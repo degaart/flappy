@@ -49,3 +49,10 @@ target_link_libraries(${PROJECT_NAME}
         glm::glm
 )
 
+if (WIN32)
+    target_link_libraries(${PROJECT_NAME}
+        PUBLIC
+            shlwapi.lib
+    )
+endif()
+

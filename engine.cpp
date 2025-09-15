@@ -8,12 +8,19 @@
 #include <stdlib.h>
 #include <string>
 
+#ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shlwapi.h>
+#else
+#include <libgen.h>
+#endif
+
 void Engine::setPalette(const std::vector<glm::vec3>& palette)
 {
     if (palette.size() != 256)
     {
-        fprintf(stderr, "Invalid palette: incorrect number of colors\n");
-        abort();
+        panic("Invalid palette: incorrect number of colors");
     }
 
     /*
@@ -46,8 +53,7 @@ Bitmap Engine::loadBitmap(const char* filename)
     auto imageData = stbi_load(filename, &w, &h, &channels, 0);
     if (!imageData)
     {
-        fprintf(stderr, "Failed to load file %s\n", filename);
-        abort();
+        panic("Failed to load file %s", filename);
     }
 
     /*
@@ -94,8 +100,7 @@ std::vector<glm::vec3> Engine::loadPalette(const char* filename)
     FILE* f = fopen(filename, "rt");
     if (!f)
     {
-        fprintf(stderr, "Failed to load file %s\n", filename);
-        abort();
+        panic("Failed to load file %s", filename);
     }
 
     auto getLine = [f]() -> std::optional<std::string>
@@ -117,18 +122,15 @@ std::vector<glm::vec3> Engine::loadPalette(const char* filename)
 
     if (auto header = getLine(); !header || *header != "JASC-PAL")
     {
-        fprintf(stderr, "Invalid header (magic) for %s\n", filename);
-        abort();
+        panic("Invalid header (magic) for %s", filename);
     }
     else if (auto version = getLine(); !version || *version != "0100")
     {
-        fprintf(stderr, "Invalid header (version) for %s\n", filename);
-        abort();
+        panic("Invalid header (version) for %s", filename);
     }
     else if (auto version = getLine(); !version || *version != "256")
     {
-        fprintf(stderr, "Invalid header (colorcount) for %s\n", filename);
-        abort();
+        panic("Invalid header (colorcount) for %s", filename);
     }
 
     std::vector<glm::vec3> result;
@@ -138,36 +140,31 @@ std::vector<glm::vec3> Engine::loadPalette(const char* filename)
         auto line = getLine();
         if (!line)
         {
-            fprintf(stderr, "Failed to read entry %d in %s\n", i, filename);
-            abort();
+            panic("Failed to read entry %d in %s", i, filename);
         }
 
         auto tokens = split(*line, " ");
         if (tokens.size() != 3)
         {
-            fprintf(stderr, "Invalid entry format \"%s\" in %s\n", line->c_str(), filename);
-            abort();
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
         }
 
         auto r = parseInt(tokens[0]);
         if (!r)
         {
-            fprintf(stderr, "Invalid entry format \"%s\" in %s\n", line->c_str(), filename);
-            abort();
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
         }
 
         auto g = parseInt(tokens[1]);
         if (!g)
         {
-            fprintf(stderr, "Invalid entry format \"%s\" in %s\n", line->c_str(), filename);
-            abort();
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
         }
 
         auto b = parseInt(tokens[2]);
         if (!b)
         {
-            fprintf(stderr, "Invalid entry format \"%s\" in %s\n", line->c_str(), filename);
-            abort();
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
         }
 
         result.emplace_back(*r / 255.0f, *g / 255.0f, *b / 255.0f);
@@ -187,27 +184,23 @@ SDL_AppResult Engine::onInit()
     auto size = Game::getGameScreenSize();
     if (!SDL_CreateWindowAndRenderer(Game::getName(), size.x * 3, size.y * 3, SDL_WINDOW_RESIZABLE, &_window, &_renderer))
     {
-        fprintf(stderr, "Failed to create window\n");
-        return SDL_APP_FAILURE;
+        panic("Failed to create window");
     }
 
     _backbuffer = SDL_CreateSurface(size.x, size.y, SDL_PIXELFORMAT_INDEX8);
     if (!_backbuffer)
     {
-        fprintf(stderr, "Failed to create backbuffer\n");
-        return SDL_APP_FAILURE;
+        panic("Failed to create backbuffer");
     }
 
     _palette = SDL_CreateSurfacePalette(_backbuffer);
     if (!_palette)
     {
-        fprintf(stderr, "Failed to create backbuffer palette\n");
-        return SDL_APP_FAILURE;
+        panic("Failed to create backbuffer palette");
     }
     if (_palette->ncolors != 256)
     {
-        fprintf(stderr, "Invalid number of colors in palette\n");
-        return SDL_APP_FAILURE;
+        panic("Invalid number of colors in palette");
     }
 
     _game = new Game;
@@ -271,8 +264,7 @@ SDL_AppResult Engine::onIterate()
     memset(_backbuffer->pixels, 0, _backbuffer->pitch * _backbuffer->h);
     if (!_game->onRender(*this, _lag / dT))
     {
-        fprintf(stderr, "Rendering failed\n");
-        abort();
+        panic("Rendering failed");
     }
     SDL_UnlockSurface(_backbuffer);
 
@@ -519,5 +511,36 @@ void Engine::setDebugText(const char* text)
         _debugText += " ";
     }
     _debugText += text;
+}
+
+void __panic(const char* file, int line,
+             const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+#ifdef WIN32
+    char baseFile[MAX_PATH];
+    lstrcpyn(baseFile, file, sizeof(baseFile));
+    PathStripPathA(baseFile);
+#else
+    char* tmp = strdup(file);
+    char* baseFile = strdup(basename(tmp));
+    free(tmp);
+#endif
+
+    char buffer[512];
+    snprintf(buffer, sizeof(buffer), "Fatal error at %s:%d\n\n", baseFile, line);
+    vsnprintf(buffer+strlen(buffer), sizeof(buffer)-strlen(buffer), format, args);
+    va_end(args);
+
+#ifdef WIN32
+    MessageBoxA(nullptr, buffer, "Panic", MB_OK|MB_ICONERROR);
+    ExitProcess(1);
+#else
+    free(baseFile);
+    fprintf(stderr, "PANIC: %s\n", buffer);
+    abort();
+#endif
 }
 
