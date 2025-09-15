@@ -4,6 +4,10 @@ project(game)
 # use current timestamp when extracting archives with ExternalProject or FetchContent
 cmake_policy(SET CMP0135 NEW)
 
+# Set C++17 as default
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # emscripten
 if (EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX .html)
@@ -72,7 +76,6 @@ if (NOT MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions)
 endif()
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
         glm::glm
@@ -95,4 +98,8 @@ if (ZORRO_ENABLE_SDL)
             SDL3::SDL3
     )
 endif()
+
+add_subdirectory(testDdraw)
+
+
 
