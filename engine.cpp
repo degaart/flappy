@@ -106,20 +106,26 @@ std::vector<glm::vec3> Engine::loadPalette(const char* filename)
             return std::nullopt;
         }
 
-        return buffer;
+        std::string result(buffer);
+        while (!result.empty() && (result.back() == '\r' || result.back() == '\n'))
+        {
+            result.pop_back();
+        }
+
+        return result;
     };
 
-    if (auto header = getLine(); !header || *header != "JASC-PAL\r\n")
+    if (auto header = getLine(); !header || *header != "JASC-PAL")
     {
         fprintf(stderr, "Invalid header (magic) for %s\n", filename);
         abort();
     }
-    else if (auto version = getLine(); !version || *version != "0100\r\n")
+    else if (auto version = getLine(); !version || *version != "0100")
     {
         fprintf(stderr, "Invalid header (version) for %s\n", filename);
         abort();
     }
-    else if (auto version = getLine(); !version || *version != "256\r\n")
+    else if (auto version = getLine(); !version || *version != "256")
     {
         fprintf(stderr, "Invalid header (colorcount) for %s\n", filename);
         abort();
@@ -134,11 +140,6 @@ std::vector<glm::vec3> Engine::loadPalette(const char* filename)
         {
             fprintf(stderr, "Failed to read entry %d in %s\n", i, filename);
             abort();
-        }
-
-        while (!line->empty() && (line->back() == '\r' || line->back() == '\n'))
-        {
-            line->pop_back();
         }
 
         auto tokens = split(*line, " ");

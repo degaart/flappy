@@ -25,10 +25,6 @@ public:
 
 class Game;
 
-#ifdef MAIN_CPP
-#define private public
-#endif
-
 class Engine
 {
 public:
@@ -49,6 +45,11 @@ public:
     void clear();
     void setDebugText(const char* text);
 
+    SDL_AppResult onInit();
+    SDL_AppResult onEvent(SDL_Event* event);
+    SDL_AppResult onIterate();
+    void onQuit(SDL_AppResult result);
+
 private:
     SDL_Window* _window;
     SDL_Renderer* _renderer;
@@ -63,14 +64,6 @@ private:
     Keystate _keyState;
     std::string _debugText;
 
-    SDL_AppResult onInit();
-    SDL_AppResult onEvent(SDL_Event* event);
-    SDL_AppResult onIterate();
-    void onQuit(SDL_AppResult result);
-
     void setDrawColor(glm::vec3 color);
 };
 
-#ifdef MAIN_CPP
-#undef private
-#endif
