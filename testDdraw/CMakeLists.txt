@@ -1,10 +1,10 @@
-set(PROGRAM_NAME testDdraw)
+function(add_program PROGRAM_NAME)
+    add_executable(${PROGRAM_NAME} WIN32 ${PROGRAM_NAME}.cpp)
+    target_compile_definitions(${PROGRAM_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
+    target_link_libraries(${PROGRAM_NAME} PUBLIC shlwapi ddraw dxguid)
+endfunction()
 
-file(GLOB SOURCE_FILES *.cpp *.c)
-file(GLOB HEADER_FILES *.hpp *.h)
-
-add_executable(${PROGRAM_NAME} WIN32 ${SOURCE_FILES} ${HEADER_FILES})
-target_compile_definitions(${PROGRAM_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
-target_link_libraries(${PROGRAM_NAME} PUBLIC shlwapi.lib ddraw.lib dxguid.lib)
+add_program(test1)
+add_program(test2)
 
 
