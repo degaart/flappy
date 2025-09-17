@@ -3,8 +3,6 @@
 #include <stdint.h>
 #include <vector>
 #include <glm/glm.hpp>
-#include <SDL3/SDL.h>
-#include <string>
 
 struct Keystate
 {
@@ -45,26 +43,7 @@ public:
     void clear();
     void setDebugText(const char* text);
 
-    SDL_AppResult onInit();
-    SDL_AppResult onEvent(SDL_Event* event);
-    SDL_AppResult onIterate();
-    void onQuit(SDL_AppResult result);
-
 private:
-    SDL_Window* _window;
-    SDL_Renderer* _renderer;
-    SDL_Surface* _backbuffer;
-    Game* _game;
-    SDL_Palette* _palette;
-    int _frames;
-    double _fpsTimer;
-    double _prevTime;
-    double _lag;
-    int _fps;
-    Keystate _keyState;
-    std::string _debugText;
-
-    void setDrawColor(glm::vec3 color);
 };
 
 void __panic(const char* file, int line,

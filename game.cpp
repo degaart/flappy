@@ -1,5 +1,6 @@
 #include "game.hpp"
 #include "engine.hpp"
+#include <stdio.h>
 
 const char* Game::getName()
 {

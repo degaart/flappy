@@ -15,7 +15,14 @@ if (EMSCRIPTEN)
 endif()
 
 # Options
-option(ZORRO_ENABLE_SDL "Enable SDL engine" ON)
+option(ZORRO_ENGINE "Select engine (sdl, ddraw)" "sdl")
+
+# Validate engine
+if (ZORRO_ENGINE STREQUAL "sdl")
+    set(ZORRO_ENGINE_SDL ON)
+elseif (ZORRO_ENGINE STREQUAL "ddraw")
+    set(ZORRO_ENGINE_DDRAW ON)
+endif()
 
 # needed for SDL3
 set(BUILD_SHARED_LIBS OFF)
@@ -25,7 +32,7 @@ include(FetchContent)
 mark_as_advanced(FETCHCONTENT_BASE_DIR FETCHCONTENT_FULLY_DISCONNECTED FETCHCONTENT_QUIET FETCHCONTENT_UPDATES_DISCONNECTED)
 
 # SDL3
-if (ZORRO_ENABLE_SDL)
+if (ZORRO_ENGINE_SDL)
     FetchContent_Declare(
         sdl3
         URL https://github.com/libsdl-org/SDL/releases/download/release-3.2.22/SDL3-3.2.22.tar.gz
@@ -63,11 +70,16 @@ mark_as_advanced(FETCHCONTENT_SOURCE_DIR_GLM FETCHCONTENT_UPDATES_DISCONNECTED_G
 file(GLOB SOURCE_FILES *.cpp *.c)
 file(GLOB HEADER_FILES *.hpp *.h)
 
-if (ZORRO_ENABLE_SDL)
+if (ZORRO_ENGINE_SDL)
     file(GLOB SDL_SOURCE_FILES sdl/*.cpp sdl/*.c)
     file(GLOB SDL_HEADER_FILES sdl/*.hpp sdl/*.h)
     list(APPEND SOURCE_FILES ${SDL_SOURCE_FILES})
     list(APPEND HEADER_FILES ${SDL_HEADER_FILES})
+elseif (ZORRO_ENGINE_DDRAW)
+    file(GLOB DDRAW_SOURCE_FILES ddraw/*.cpp ddraw/*.c)
+    file(GLOB DDRAW_HEADER_FILES ddraw/*.hpp ddraw/*.h)
+    list(APPEND SOURCE_FILES ${DDRAW_SOURCE_FILES})
+    list(APPEND HEADER_FILES ${DDRAW_HEADER_FILES})
 endif()
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${HEADER_FILES})
@@ -88,7 +100,7 @@ if (WIN32)
     )
 endif()
 
-if (ZORRO_ENABLE_SDL)
+if (ZORRO_ENGINE_SDL)
     target_include_directories(${PROJECT_NAME}
         PUBLIC
             sdl
@@ -97,9 +109,26 @@ if (ZORRO_ENABLE_SDL)
         PUBLIC
             SDL3::SDL3
     )
+elseif (ZORRO_ENGINE_DDRAW)
+    target_include_directories(${PROJECT_NAME}
+        PUBLIC
+            ddraw
+    )
+
+    target_link_libraries(${PROJECT_NAME}
+    PUBLIC
+        shlwapi
+        ddraw
+        dxguid
+        ole32
+    )
+    target_compile_definitions(${PROJECT_NAME}
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+    )
+    add_subdirectory(testDdraw)
 endif()
 
-add_subdirectory(testDdraw)
 
 
 
