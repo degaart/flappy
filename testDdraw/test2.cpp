@@ -10,6 +10,7 @@ public:
     bool init() override;
     int run() override;
     void cleanup() override;
+
 private:
     LPDIRECTDRAW4 _ddraw;
     LPDIRECTDRAWSURFACE4 _primarySurf;
@@ -18,7 +19,7 @@ private:
     bool _running;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
-    void onPaint(WPARAM,LPARAM);
+    void onPaint(WPARAM, LPARAM);
     void render();
 };
 
@@ -46,13 +47,6 @@ bool App::init()
     }
 
     auto windowStyle = WS_OVERLAPPEDWINDOW;
-
-    RECT winRect;
-    winRect.left = winRect.top = 0;
-    winRect.right = 640;
-    winRect.bottom = 480;
-    AdjustWindowRect(&winRect, windowStyle, FALSE);
-
     HWND hwnd = CreateWindowEx(0, "MainWin", "Zinzolu", windowStyle, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, _hinstance, this);
     if (!hwnd)
     {
@@ -96,21 +90,21 @@ bool App::init()
 int App::run()
 {
     MSG msg;
-    //while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+    // while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
     //{
-    //    if (msg.message == WM_QUIT)
-    //    {
-    //        return msg.wParam;;
-    //    }
-    //    TranslateMessage(&msg);
-    //    DispatchMessage(&msg);
-    //}
-    //WaitMessage();
+    //     if (msg.message == WM_QUIT)
+    //     {
+    //         return msg.wParam;;
+    //     }
+    //     TranslateMessage(&msg);
+    //     DispatchMessage(&msg);
+    // }
+    // WaitMessage();
     while (GetMessage(&msg, nullptr, 0, 0))
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
-        //render();
+        // render();
     }
     return 0;
 }
