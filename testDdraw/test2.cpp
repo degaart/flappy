@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <ddraw.h>
+#include <stdint.h>
 
 class App : public IApp
 {
@@ -89,23 +90,25 @@ bool App::init()
 
 int App::run()
 {
-    MSG msg;
-    // while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+    while (true)
+    {
+        MSG msg;
+        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+        {
+            if (msg.message == WM_QUIT)
+            {
+                return msg.wParam;
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        // render();
+    }
+    // while (GetMessage(&msg, nullptr, 0, 0))
     //{
-    //     if (msg.message == WM_QUIT)
-    //     {
-    //         return msg.wParam;;
-    //     }
     //     TranslateMessage(&msg);
     //     DispatchMessage(&msg);
     // }
-    // WaitMessage();
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-        // render();
-    }
     return 0;
 }
 
@@ -170,6 +173,14 @@ void App::render()
     RECT rc;
     GetClientRect(_hwnd, &rc);
     OffsetRect(&rc, origin.x, origin.y);
+    if (rc.left < 0)
+    {
+        rc.left = 0;
+    }
+    if (rc.top < 0)
+    {
+        rc.top = 0;
+    }
 
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
@@ -177,6 +188,8 @@ void App::render()
     CHECK(_backSurf->GetSurfaceDesc(&ddsd));
     if (ddsd.dwWidth != rc.right - rc.left || ddsd.dwHeight != rc.bottom - rc.top)
     {
+        _ddraw->Release();
+
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
         ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
@@ -186,12 +199,37 @@ void App::render()
         CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
     }
 
+    /* Clear backbuffer */
     DDBLTFX fx;
     fx.dwSize = sizeof(fx);
     fx.dwFillColor = 0xFFFFFFFF;
+    RETRY(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
 
-    CHECK(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
-    CHECK(_primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr));
+    /* Render pattern */
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    RETRY(_backSurf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
+
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+    uint32_t* ptr = reinterpret_cast<uint32_t*>(ddsd.lpSurface);
+    for (int y = 0; y < ddsd.dwHeight; y++)
+    {
+        for (int x = 0; x < ddsd.dwWidth; x++)
+        {
+            *ptr = r | (g << 8) | (b << 16) | (0xFF << 24);
+            ptr++;
+            r++;
+            b++;
+        }
+        g++;
+        ptr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(ptr) + ddsd.lPitch);
+    }
+    CHECK(_backSurf->Unlock(nullptr));
+
+    /* Blit backbuffer to main surface */
+    RETRY(_primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr));
 }
 
 std::unique_ptr<IApp> makeApp(HINSTANCE hInstance)

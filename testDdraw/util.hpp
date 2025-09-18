@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ddraw.h>
 #include <map>
 #include <memory>
 #include <optional>
@@ -58,7 +59,7 @@ static void __trace(const char* file, int line, const char* format, ...)
 {
     va_list args;
     va_start(args, format);
-    
+
     char baseFile[MAX_PATH];
     lstrcpyn(baseFile, file, sizeof(baseFile));
     PathStripPathA(baseFile);
@@ -77,16 +78,168 @@ static void __trace(const char* file, int line, const char* format, ...)
 
 #define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
 
+inline const char* hresult2str(HRESULT hResult)
+{
+#define X(X)                                                                                                                                                   \
+    case X:                                                                                                                                                    \
+        return #X
+
+    switch (hResult)
+    {
+        X(DDERR_ALREADYINITIALIZED);
+        X(DDERR_CANNOTATTACHSURFACE);
+        X(DDERR_CANNOTDETACHSURFACE);
+        X(DDERR_CURRENTLYNOTAVAIL);
+        X(DDERR_EXCEPTION);
+        X(DDERR_GENERIC);
+        X(DDERR_HEIGHTALIGN);
+        X(DDERR_INCOMPATIBLEPRIMARY);
+        X(DDERR_INVALIDCAPS);
+        X(DDERR_INVALIDCLIPLIST);
+        X(DDERR_INVALIDMODE);
+        X(DDERR_INVALIDOBJECT);
+        X(DDERR_INVALIDPARAMS);
+        X(DDERR_INVALIDPIXELFORMAT);
+        X(DDERR_INVALIDRECT);
+        X(DDERR_LOCKEDSURFACES);
+        X(DDERR_NO3D);
+        X(DDERR_NOALPHAHW);
+        X(DDERR_NOSTEREOHARDWARE);
+        X(DDERR_NOSURFACELEFT);
+        X(DDERR_NOCLIPLIST);
+        X(DDERR_NOCOLORCONVHW);
+        X(DDERR_NOCOOPERATIVELEVELSET);
+        X(DDERR_NOCOLORKEY);
+        X(DDERR_NOCOLORKEYHW);
+        X(DDERR_NODIRECTDRAWSUPPORT);
+        X(DDERR_NOEXCLUSIVEMODE);
+        X(DDERR_NOFLIPHW);
+        X(DDERR_NOGDI);
+        X(DDERR_NOMIRRORHW);
+        X(DDERR_NOTFOUND);
+        X(DDERR_NOOVERLAYHW);
+        X(DDERR_OVERLAPPINGRECTS);
+        X(DDERR_NORASTEROPHW);
+        X(DDERR_NOROTATIONHW);
+        X(DDERR_NOSTRETCHHW);
+        X(DDERR_NOT4BITCOLOR);
+        X(DDERR_NOT4BITCOLORINDEX);
+        X(DDERR_NOT8BITCOLOR);
+        X(DDERR_NOTEXTUREHW);
+        X(DDERR_NOVSYNCHW);
+        X(DDERR_NOZBUFFERHW);
+        X(DDERR_NOZOVERLAYHW);
+        X(DDERR_OUTOFCAPS);
+        X(DDERR_OUTOFMEMORY);
+        X(DDERR_OUTOFVIDEOMEMORY);
+        X(DDERR_OVERLAYCANTCLIP);
+        X(DDERR_OVERLAYCOLORKEYONLYONEACTIVE);
+        X(DDERR_PALETTEBUSY);
+        X(DDERR_COLORKEYNOTSET);
+        X(DDERR_SURFACEALREADYATTACHED);
+        X(DDERR_SURFACEALREADYDEPENDENT);
+        X(DDERR_SURFACEBUSY);
+        X(DDERR_CANTLOCKSURFACE);
+        X(DDERR_SURFACEISOBSCURED);
+        X(DDERR_SURFACELOST);
+        X(DDERR_SURFACENOTATTACHED);
+        X(DDERR_TOOBIGHEIGHT);
+        X(DDERR_TOOBIGSIZE);
+        X(DDERR_TOOBIGWIDTH);
+        X(DDERR_UNSUPPORTED);
+        X(DDERR_UNSUPPORTEDFORMAT);
+        X(DDERR_UNSUPPORTEDMASK);
+        X(DDERR_INVALIDSTREAM);
+        X(DDERR_VERTICALBLANKINPROGRESS);
+        X(DDERR_WASSTILLDRAWING);
+        X(DDERR_DDSCAPSCOMPLEXREQUIRED);
+        X(DDERR_XALIGN);
+        X(DDERR_INVALIDDIRECTDRAWGUID);
+        X(DDERR_DIRECTDRAWALREADYCREATED);
+        X(DDERR_NODIRECTDRAWHW);
+        X(DDERR_PRIMARYSURFACEALREADYEXISTS);
+        X(DDERR_NOEMULATION);
+        X(DDERR_REGIONTOOSMALL);
+        X(DDERR_CLIPPERISUSINGHWND);
+        X(DDERR_NOCLIPPERATTACHED);
+        X(DDERR_NOHWND);
+        X(DDERR_HWNDSUBCLASSED);
+        X(DDERR_HWNDALREADYSET);
+        X(DDERR_NOPALETTEATTACHED);
+        X(DDERR_NOPALETTEHW);
+        X(DDERR_BLTFASTCANTCLIP);
+        X(DDERR_NOBLTHW);
+        X(DDERR_NODDROPSHW);
+        X(DDERR_OVERLAYNOTVISIBLE);
+        X(DDERR_NOOVERLAYDEST);
+        X(DDERR_INVALIDPOSITION);
+        X(DDERR_NOTAOVERLAYSURFACE);
+        X(DDERR_EXCLUSIVEMODEALREADYSET);
+        X(DDERR_NOTFLIPPABLE);
+        X(DDERR_CANTDUPLICATE);
+        X(DDERR_NOTLOCKED);
+        X(DDERR_CANTCREATEDC);
+        X(DDERR_NODC);
+        X(DDERR_WRONGMODE);
+        X(DDERR_IMPLICITLYCREATED);
+        X(DDERR_NOTPALETTIZED);
+        X(DDERR_UNSUPPORTEDMODE);
+        X(DDERR_NOMIPMAPHW);
+        X(DDERR_INVALIDSURFACETYPE);
+        X(DDERR_NOOPTIMIZEHW);
+        X(DDERR_NOTLOADED);
+        X(DDERR_NOFOCUSWINDOW);
+        X(DDERR_NOTONMIPMAPSUBLEVEL);
+        X(DDERR_DCALREADYCREATED);
+        X(DDERR_NONONLOCALVIDMEM);
+        X(DDERR_CANTPAGELOCK);
+        X(DDERR_CANTPAGEUNLOCK);
+        X(DDERR_NOTPAGELOCKED);
+        X(DDERR_MOREDATA);
+        X(DDERR_EXPIRED);
+        X(DDERR_TESTFINISHED);
+        X(DDERR_NEWMODE);
+        X(DDERR_D3DNOTINITIALIZED);
+        X(DDERR_VIDEONOTACTIVE);
+        X(DDERR_NOMONITORINFORMATION);
+        X(DDERR_NODRIVERSUPPORT);
+        X(DDERR_DEVICEDOESNTOWNSURFACE);
+        X(DDERR_NOTINITIALIZED);
+        X(DD_OK);
+        X(DD_FALSE);
+    default:
+        return "";
+    }
+#undef X
+}
+
 #define CHECK(fn)                                                                                                                                              \
     do                                                                                                                                                         \
     {                                                                                                                                                          \
         if (auto ret = fn; FAILED(ret))                                                                                                                        \
         {                                                                                                                                                      \
             char buffer[512];                                                                                                                                  \
-            stbsp_snprintf(buffer, sizeof(buffer), "%s failed: 0x%lX", #fn, ret);                                                                              \
+            stbsp_snprintf(buffer, sizeof(buffer), "%s failed: 0x%lX %s", #fn, ret, hresult2str(ret));                                                         \
             __panic(__FILE__, __LINE__, "%s", buffer);                                                                                                         \
         }                                                                                                                                                      \
     } while (false)
+
+#define RETRY(fn)                                                                                                                                              \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        auto ret = fn;                                                                                                                                         \
+        if (FAILED(ret))                                                                                                                                       \
+        {                                                                                                                                                      \
+            if (ret != DDERR_SURFACEBUSY)                                                                                            \
+            {                                                                                                                                                  \
+                panic("%s failed: 0x%X %s", #fn, ret, hresult2str(ret));                                                                                       \
+            }                                                                                                                                                  \
+        }                                                                                                                                                      \
+        else                                                                                                                                                   \
+        {                                                                                                                                                      \
+            break;                                                                                                                                             \
+        }                                                                                                                                                      \
+    } while (true)
 
 class IApp
 {
