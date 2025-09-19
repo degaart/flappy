@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ddraw.h>
-#include <map>
 #include <memory>
 #include <optional>
 #include <shlwapi.h>
@@ -241,6 +240,18 @@ inline const char* hresult2str(HRESULT hResult)
         }                                                                                                                                                      \
     } while (true)
 
+static double hrTimerFrequency;
+inline double getCurrentTime()
+{
+    LARGE_INTEGER counter;
+    if (!QueryPerformanceCounter(&counter))
+    {
+        panic("QueryPerformanceCounter failed");
+    }
+
+    return counter.QuadPart / hrTimerFrequency;
+}
+
 class IApp
 {
 public:
@@ -315,6 +326,13 @@ std::unique_ptr<IApp> makeApp(HINSTANCE hInstance);
 
 INT APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, INT)
 {
+    LARGE_INTEGER freq;
+    if (!QueryPerformanceFrequency(&freq))
+    {
+        panic("QueryPerformanceFrequency failed");
+    }
+    hrTimerFrequency = freq.QuadPart;
+
     CoInitialize(nullptr);
 
     auto app = makeApp(hInstance);

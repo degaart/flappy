@@ -18,15 +18,23 @@ private:
     LPDIRECTDRAWSURFACE4 _backSurf;
     LPDIRECTDRAWCLIPPER _clipper;
     bool _running;
+    CRITICAL_SECTION _criticalSection;
+    float _b;
+    int _fps;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
+    void update(double dT);
     void render();
 };
 
+void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dstRect, LPDIRECTDRAWSURFACE4 srcSurf, LPRECT srcRect, DWORD flags, LPDDBLTFX fx);
+#define blit(dstSurf, dstRect, srcSurf, srcRect, flags, fx) __blit(__FILE__, __LINE__, dstSurf, dstRect, srcSurf, srcRect, flags, fx)
+
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance), _running(false)
+    : IApp(hInstance), _running(false), _b(0.0f)
 {
+    InitializeCriticalSection(&_criticalSection);
 }
 
 bool App::init()
@@ -90,6 +98,10 @@ bool App::init()
 
 int App::run()
 {
+    double prevTime = 0.0;
+    double lag = 0;
+    double frameTimer = 0.0f;
+    int frames = 0;
     while (true)
     {
         MSG msg;
@@ -102,7 +114,30 @@ int App::run()
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        // render();
+        if (_running)
+        {
+            auto beginTime = getCurrentTime();
+            auto elapsed = beginTime - prevTime;
+            lag += elapsed;
+            auto dT = 1.0/60.0;
+            while (lag > dT)
+            {
+                update(dT);
+                lag -= dT;
+            }
+
+            frames++;
+            frameTimer += elapsed;
+            if (frameTimer >= 1.0)
+            {
+                _fps = round(frames / frameTimer);
+                frameTimer = 0;
+                frames = 0;
+            }
+
+            render();
+            prevTime = beginTime;
+        }
     }
     // while (GetMessage(&msg, nullptr, 0, 0))
     //{
@@ -125,6 +160,7 @@ void App::cleanup()
         _ddraw->Release();
         _ddraw = nullptr;
     }
+    DeleteCriticalSection(&_criticalSection);
 }
 
 std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -147,31 +183,54 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
             SendMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
         }
         return 0;
-    case WM_PAINT:
-        onPaint(wparam, lparam);
-        return 0;
+    //case WM_PAINT:
+    //    onPaint(wparam, lparam);
+    //    return 0;
     }
     return std::nullopt;
 }
 
 void App::onPaint(WPARAM wparam, LPARAM lparam)
 {
-    if (_running)
+    // if (_running)
+    //{
+    //     assert(_primarySurf != nullptr);
+    //     assert(_backSurf != nullptr);
+    //     render();
+    // }
+}
+
+void App::update(double dT)
+{
+    _b += (dT * 128.0f);
+    while (_b > 255.0f)
     {
-        assert(_primarySurf != nullptr);
-        assert(_backSurf != nullptr);
-        render();
+        _b -= 255.0f;
     }
 }
 
 void App::render()
 {
+    if (!TryEnterCriticalSection(&_criticalSection))
+    {
+        return;
+    }
+
+    char debugText[255];
+    *debugText = '\0';
+
     POINT origin;
     origin.x = origin.y = 0;
     ClientToScreen(_hwnd, &origin);
 
     RECT rc;
     GetClientRect(_hwnd, &rc);
+    if (rc.right - rc.left <= 0 || rc.bottom - rc.top <= 0)
+    {
+        LeaveCriticalSection(&_criticalSection);
+        return;
+    }
+
     OffsetRect(&rc, origin.x, origin.y);
     if (rc.left < 0)
     {
@@ -199,37 +258,56 @@ void App::render()
         CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
     }
 
+    if (_backSurf->IsLost())
+    {
+        CHECK(_backSurf->Restore());
+    }
+
     /* Clear backbuffer */
     DDBLTFX fx;
     fx.dwSize = sizeof(fx);
     fx.dwFillColor = 0xFFFFFFFF;
-    RETRY(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
+    CHECK(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
 
     /* Render pattern */
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    RETRY(_backSurf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
+    CHECK(_backSurf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
 
     uint8_t r = 0;
     uint8_t g = 0;
-    uint8_t b = 0;
-    uint32_t* ptr = reinterpret_cast<uint32_t*>(ddsd.lpSurface);
+    uint8_t b = roundf(_b);
+    auto ptr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
     for (int y = 0; y < ddsd.dwHeight; y++)
     {
+        uint32_t* line = reinterpret_cast<uint32_t*>(ptr);
         for (int x = 0; x < ddsd.dwWidth; x++)
         {
-            *ptr = r | (g << 8) | (b << 16) | (0xFF << 24);
-            ptr++;
+            *line = b | (g << 8) | (r << 16) | (0xFF << 24);
+            line++;
             r++;
-            b++;
         }
         g++;
-        ptr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(ptr) + ddsd.lPitch);
+        ptr = reinterpret_cast<uint8_t*>(ptr) + ddsd.lPitch;
     }
     CHECK(_backSurf->Unlock(nullptr));
 
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d b=%u", _fps, b);
+
+    HDC hdc;
+    CHECK(_backSurf->GetDC(&hdc));
+    SetTextColor(hdc, RGB(255,0,0));
+    TextOut(hdc, 0, 0, debugText, lstrlen(debugText));
+    _backSurf->ReleaseDC(hdc);
+
     /* Blit backbuffer to main surface */
-    RETRY(_primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr));
+    if (_primarySurf->IsLost())
+    {
+        CHECK(_primarySurf->Restore());
+    }
+    _primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
+
+    LeaveCriticalSection(&_criticalSection);
 }
 
 std::unique_ptr<IApp> makeApp(HINSTANCE hInstance)

@@ -29,6 +29,17 @@
             }
         },
         {
+            "name": "ddraw debug",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_WARN_DEPRECATED": "OFF",
+                "ZORRO_ENGINE": "ddraw"
+            }
+        },
+        {
             "name": "win95 debug",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
