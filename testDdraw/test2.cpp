@@ -2,7 +2,12 @@
 
 #include <assert.h>
 #include <ddraw.h>
+#include <math.h>
 #include <stdint.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include "../stb_image.h"
 
 class App : public IApp
 {
@@ -21,11 +26,13 @@ private:
     CRITICAL_SECTION _criticalSection;
     float _b;
     int _fps;
+    LPDIRECTDRAWSURFACE4 _background;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
     void update(double dT);
     void render();
+    LPDIRECTDRAWSURFACE4 loadBitmap(const char* name);
 };
 
 void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dstRect, LPDIRECTDRAWSURFACE4 srcSurf, LPRECT srcRect, DWORD flags, LPDDBLTFX fx);
@@ -56,7 +63,23 @@ bool App::init()
     }
 
     auto windowStyle = WS_OVERLAPPEDWINDOW;
-    HWND hwnd = CreateWindowEx(0, "MainWin", "Zinzolu", windowStyle, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, _hinstance, this);
+    RECT rcWindow;
+    rcWindow.left = 0;
+    rcWindow.top = 0;
+    rcWindow.right = 640;
+    rcWindow.bottom = 480;
+    AdjustWindowRect(&rcWindow, windowStyle, FALSE);
+
+    HWND hwnd = CreateWindowEx(0, 
+                               "MainWin", 
+                               "Zinzolu", 
+                               windowStyle, 
+                               CW_USEDEFAULT, 0, 
+                               rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, 
+                               nullptr,
+                               nullptr, 
+                               _hinstance, 
+                               this);
     if (!hwnd)
     {
         return false;
@@ -89,6 +112,9 @@ bool App::init()
     CHECK(_clipper->SetHWnd(0, hwnd));
     CHECK(_primarySurf->SetClipper(_clipper));
 
+    _background = loadBitmap("doge.png");
+    //auto spriteSheet = loadBitmap("tiles1.png");
+
     ShowWindow(hwnd, SW_SHOWDEFAULT);
     UpdateWindow(hwnd);
 
@@ -119,9 +145,15 @@ int App::run()
             auto beginTime = getCurrentTime();
             auto elapsed = beginTime - prevTime;
             lag += elapsed;
-            auto dT = 1.0/60.0;
+            if (lag > 1.0)
+            {
+                lag = 1.0;
+            }
+
+            auto dT = 1.0 / 60.0;
             while (lag > dT)
             {
+                // trace("Updating, dT=%0.2f lag=%0.2f", dT, lag);
                 update(dT);
                 lag -= dT;
             }
@@ -182,10 +214,14 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         {
             SendMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
         }
+        else if (wparam == VK_F5)
+        {
+            render();
+        }
         return 0;
-    //case WM_PAINT:
-    //    onPaint(wparam, lparam);
-    //    return 0;
+        // case WM_PAINT:
+        //     onPaint(wparam, lparam);
+        //     return 0;
     }
     return std::nullopt;
 }
@@ -211,10 +247,7 @@ void App::update(double dT)
 
 void App::render()
 {
-    if (!TryEnterCriticalSection(&_criticalSection))
-    {
-        return;
-    }
+    EnterCriticalSection(&_criticalSection);
 
     char debugText[255];
     *debugText = '\0';
@@ -247,7 +280,7 @@ void App::render()
     CHECK(_backSurf->GetSurfaceDesc(&ddsd));
     if (ddsd.dwWidth != rc.right - rc.left || ddsd.dwHeight != rc.bottom - rc.top)
     {
-        _ddraw->Release();
+        _backSurf->Release();
 
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
@@ -269,6 +302,15 @@ void App::render()
     fx.dwFillColor = 0xFFFFFFFF;
     CHECK(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
 
+    RECT dstRect;
+    dstRect.left = 0;
+    dstRect.top = 0;
+    dstRect.right = 320;
+    dstRect.bottom = 240;
+    assert(_background != nullptr);
+    CHECK(_backSurf->Blt(&dstRect, _background, nullptr, DDBLT_WAIT, nullptr));
+
+#if 0
     /* Render pattern */
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
@@ -278,6 +320,7 @@ void App::render()
     uint8_t g = 0;
     uint8_t b = roundf(_b);
     auto ptr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+
     for (int y = 0; y < ddsd.dwHeight; y++)
     {
         uint32_t* line = reinterpret_cast<uint32_t*>(ptr);
@@ -291,12 +334,13 @@ void App::render()
         ptr = reinterpret_cast<uint8_t*>(ptr) + ddsd.lPitch;
     }
     CHECK(_backSurf->Unlock(nullptr));
+#endif
 
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d b=%u", _fps, b);
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%ld h=%ld", _fps, ddsd.dwWidth, ddsd.dwHeight);
 
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
-    SetTextColor(hdc, RGB(255,0,0));
+    SetTextColor(hdc, RGB(255, 0, 0));
     TextOut(hdc, 0, 0, debugText, lstrlen(debugText));
     _backSurf->ReleaseDC(hdc);
 
@@ -308,6 +352,50 @@ void App::render()
     _primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
 
     LeaveCriticalSection(&_criticalSection);
+}
+
+LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
+{
+    int width, height, bytesPerPixel;
+    unsigned char* data = stbi_load(name, &width, &height, &bytesPerPixel, 0);
+    assert(data != nullptr);
+    assert(bytesPerPixel == 3);
+
+    DDSURFACEDESC2 ddsd;
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.dwWidth = width;
+    ddsd.dwHeight = height;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.ddpfPixelFormat.dwSize = sizeof(ddsd.ddpfPixelFormat);
+    ddsd.ddpfPixelFormat.dwFlags = DDPF_RGB;
+    ddsd.ddpfPixelFormat.dwRGBBitCount = 24;
+
+    LPDIRECTDRAWSURFACE4 surf;
+    CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
+    CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
+
+    if (ddsd.lPitch == width * 3)
+    {
+        memcpy(ddsd.lpSurface, data, width * height * 3);
+    }
+    else
+    {
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        const uint8_t* srcPtr = reinterpret_cast<const uint8_t*>(data);
+        for (int y = 0; y < height; y++)
+        {
+            memcpy(dstPtr, srcPtr, width * 3);
+            dstPtr += ddsd.lPitch;
+            srcPtr += width * 3;
+        }
+    }
+
+    CHECK(surf->Unlock(nullptr));
+    stbi_image_free(data);
+
+    return surf;
 }
 
 std::unique_ptr<IApp> makeApp(HINSTANCE hInstance)
