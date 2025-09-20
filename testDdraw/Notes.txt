@@ -1,0 +1,4 @@
+- Blit from surfaces with different pixel format fail on old cards. They work on 3D-capable hardware
+- Some hardware do not support stretch blit (at least in 256 colors mode)
+
+

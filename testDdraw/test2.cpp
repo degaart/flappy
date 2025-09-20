@@ -1,5 +1,6 @@
 #include "util.hpp"
 
+#include <algorithm>
 #include <assert.h>
 #include <ddraw.h>
 #include <math.h>
@@ -278,7 +279,10 @@ void App::render()
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
     CHECK(_backSurf->GetSurfaceDesc(&ddsd));
-    if (ddsd.dwWidth != rc.right - rc.left || ddsd.dwHeight != rc.bottom - rc.top)
+
+    auto backsurfWidth = ddsd.dwWidth;
+    auto backsurfHeight = ddsd.dwHeight;
+    if (backsurfWidth != rc.right - rc.left || backsurfHeight != rc.bottom - rc.top)
     {
         _backSurf->Release();
 
@@ -305,10 +309,25 @@ void App::render()
     RECT dstRect;
     dstRect.left = 0;
     dstRect.top = 0;
-    dstRect.right = 320;
-    dstRect.bottom = 240;
+    dstRect.right = 100;
+    dstRect.bottom = 100;
+
+    RECT srcRect;
+    srcRect.left = 0;
+    srcRect.top = 0;
+    srcRect.right = 100;
+    srcRect.bottom = 100;
     assert(_background != nullptr);
-    CHECK(_backSurf->Blt(&dstRect, _background, nullptr, DDBLT_WAIT, nullptr));
+
+    //CHECK(_backSurf->Blt(&dstRect, _background, nullptr, DDBLT_WAIT, nullptr));
+    if (auto ret = _backSurf->Blt(&dstRect, _background, &srcRect, DDBLT_WAIT, nullptr); FAILED(ret))
+    {
+        trace("Blit failed: 0x%X %s. Rect: %ux%u %ux%u. Surface size: %ux%u",
+              ret, hresult2str(ret),
+              dstRect.left, dstRect.top,
+              dstRect.right, dstRect.bottom,
+              backsurfWidth, backsurfHeight);
+    }
 
 #if 0
     /* Render pattern */
@@ -361,36 +380,90 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     assert(data != nullptr);
     assert(bytesPerPixel == 3);
 
+    DDPIXELFORMAT ppf;
+    ppf.dwSize = sizeof(ppf);
+    CHECK(_primarySurf->GetPixelFormat(&ppf));
+    trace("dwFlags: 0x%X", ppf.dwFlags);
+    trace("dwRGBBitCount: %u", ppf.dwRGBBitCount);
+    trace("dwRBitMask: 0x%X", ppf.dwRBitMask);
+    trace("dwGBitMask: 0x%X", ppf.dwGBitMask);
+    trace("dwBBitMask: 0x%X", ppf.dwBBitMask);
+    trace("dwRGBAlphaBitMask: 0x%X", ppf.dwRGBAlphaBitMask);
+
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
     ddsd.dwWidth = width;
     ddsd.dwHeight = height;
     ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
     ddsd.ddpfPixelFormat.dwSize = sizeof(ddsd.ddpfPixelFormat);
     ddsd.ddpfPixelFormat.dwFlags = DDPF_RGB;
+    //ddsd.ddpfPixelFormat.dwRGBBitCount = 32;
+    //ddsd.ddpfPixelFormat.dwRBitMask = 0xFF0000;
+    //ddsd.ddpfPixelFormat.dwGBitMask = 0xFF00;
+    //ddsd.ddpfPixelFormat.dwBBitMask = 0xFF;
+    //ddsd.ddpfPixelFormat.dwRGBAlphaBitMask = 0x0;
     ddsd.ddpfPixelFormat.dwRGBBitCount = 24;
+    ddsd.ddpfPixelFormat.dwRBitMask = 0xFF0000;
+    ddsd.ddpfPixelFormat.dwGBitMask = 0xFF00;
+    ddsd.ddpfPixelFormat.dwBBitMask = 0xFF;
+    ddsd.ddpfPixelFormat.dwRGBAlphaBitMask = 0x0;
 
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
+
+    DDPIXELFORMAT pf;
+    pf.dwSize = sizeof(pf);
+    surf->GetPixelFormat(&pf);
+    trace("dwRGBBitCount: %u", pf.dwRGBBitCount);
+
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
 
-    if (ddsd.lPitch == width * 3)
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0xFF;
+
+    // uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+    // for (int y = 0; y < height; y++)
+    // {
+    //     uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
+    //     for (int x = 0; x < width; x++)
+    //     {
+    //         *scanline = b | (g << 8) | (r << 16) | (0xFF << 24);
+    //         scanline++;
+    //     }
+    //     dstPtr += ddsd.lPitch;
+    // }
+
+    uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+    for (int y = 0; y < height; y++)
     {
-        memcpy(ddsd.lpSurface, data, width * height * 3);
-    }
-    else
-    {
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        const uint8_t* srcPtr = reinterpret_cast<const uint8_t*>(data);
-        for (int y = 0; y < height; y++)
+        uint8_t* scanline = reinterpret_cast<uint8_t*>(dstPtr);
+        for (int x = 0; x < width; x++)
         {
-            memcpy(dstPtr, srcPtr, width * 3);
-            dstPtr += ddsd.lPitch;
-            srcPtr += width * 3;
+            *scanline++ = b;
+            *scanline++ = g;
+            *scanline++ = r;
         }
+        dstPtr += ddsd.lPitch;
     }
+
+    //if (ddsd.lPitch == width * 3)
+    //{
+    //    memcpy(ddsd.lpSurface, data, width * height * 3);
+    //}
+    //else
+    //{
+    //    uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+    //    const uint8_t* srcPtr = reinterpret_cast<const uint8_t*>(data);
+    //    for (int y = 0; y < height; y++)
+    //    {
+    //        memcpy(dstPtr, srcPtr, width * 3);
+    //        dstPtr += ddsd.lPitch;
+    //        srcPtr += width * 3;
+    //    }
+    //}
 
     CHECK(surf->Unlock(nullptr));
     stbi_image_free(data);
