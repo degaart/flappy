@@ -6,7 +6,10 @@
 #include <shlwapi.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string>
+#include <vector>
 #include <windows.h>
+#include <wingdi.h>
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "../stb_sprintf.h"
@@ -54,7 +57,7 @@ static void __trace(const char* file, int line, const char* format, ...)
 #define trace(...) __trace(__FILE__, __LINE__, __VA_ARGS__)
 // #define trace(...)
 
-[[noreturn]] static void __panic(const char* file, int line, const char* format, ...)
+static void __panic(const char* file, int line, const char* format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -73,6 +76,8 @@ static void __trace(const char* file, int line, const char* format, ...)
 
     //MessageBox(nullptr, buffer, "Panic", MB_OK | MB_ICONERROR);
     ExitProcess(1);
+    abort();
+    exit(1);
 }
 
 #define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
@@ -269,6 +274,134 @@ inline Size<int> getSurfaceSize(LPDIRECTDRAWSURFACE4 surf)
     return {(int)ddsd.dwWidth, (int)ddsd.dwHeight};
 }
 
+inline std::vector<std::string_view> split(std::string_view str, std::string_view sep)
+{
+    std::vector<std::string_view> result;
+    size_t pos = 0;
+    while (true)
+    {
+        size_t next = str.find(sep, pos);
+        if (next == std::string_view::npos)
+        {
+            result.emplace_back(str.substr(pos));
+            break;
+        }
+        result.emplace_back(str.substr(pos, next - pos));
+        pos = next + sep.size();
+    }
+    return result;
+}
+
+inline std::optional<long> parseLong(std::string_view str, int base)
+{
+    if (str.empty())
+        return std::nullopt;
+    char* end = nullptr;
+    errno = 0;
+    long value = strtol(str.data(), &end, base);
+    if (errno != 0 || end != str.data() + str.size())
+    {
+        return std::nullopt;
+    }
+    return value;
+}
+
+inline std::optional<int> parseInt(std::string_view str, int base)
+{
+    auto ret = parseLong(str, base);
+    if (!ret)
+    {
+        return std::nullopt;
+    }
+    return *ret;
+}
+
+
+inline std::vector<PALETTEENTRY> loadPalette(const char* filename)
+{
+    FILE* f = fopen(filename, "rt");
+    if (!f)
+    {
+        panic("Failed to load file %s", filename);
+    }
+
+    auto getLine = [f]() -> std::optional<std::string>
+    {
+        char buffer[512];
+        if (!fgets(buffer, sizeof(buffer), f))
+        {
+            return std::nullopt;
+        }
+
+        std::string result(buffer);
+        while (!result.empty() && (result.back() == '\r' || result.back() == '\n'))
+        {
+            result.pop_back();
+        }
+
+        return result;
+    };
+
+    if (auto header = getLine(); !header || *header != "JASC-PAL")
+    {
+        panic("Invalid header (magic) for %s", filename);
+    }
+    else if (auto version = getLine(); !version || *version != "0100")
+    {
+        panic("Invalid header (version) for %s", filename);
+    }
+    else if (auto version = getLine(); !version || *version != "256")
+    {
+        panic("Invalid header (colorcount) for %s", filename);
+    }
+
+    std::vector<PALETTEENTRY> result;
+    result.reserve(256);
+    for (int i = 0; i < 256; i++)
+    {
+        auto line = getLine();
+        if (!line)
+        {
+            panic("Failed to read entry %d in %s", i, filename);
+        }
+
+        auto tokens = split(*line, " ");
+        if (tokens.size() != 3)
+        {
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+        }
+
+        auto r = parseInt(tokens[0], 10);
+        if (!r)
+        {
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+        }
+
+        auto g = parseInt(tokens[1], 10);
+        if (!g)
+        {
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+        }
+
+        auto b = parseInt(tokens[2], 10);
+        if (!b)
+        {
+            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+        }
+
+        PALETTEENTRY entry;
+        entry.peRed = *r;
+        entry.peGreen = *g;
+        entry.peBlue = *b;
+        entry.peFlags = PC_NOCOLLAPSE;
+
+        result.emplace_back(entry);
+    }
+
+    return result;
+}
+
+#ifndef UTIL_NOAPP
 class IApp
 {
 public:
@@ -363,4 +496,6 @@ INT APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, INT)
     CoUninitialize();
     return ret;
 }
+#endif
+
 

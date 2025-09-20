@@ -66,6 +66,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glm)
 mark_as_advanced(FETCHCONTENT_SOURCE_DIR_GLM FETCHCONTENT_UPDATES_DISCONNECTED_GLM)
 
+### utility executables
+add_subdirectory(convertPng)
+
 ### executable
 file(GLOB SOURCE_FILES *.cpp *.c)
 file(GLOB HEADER_FILES *.hpp *.h)

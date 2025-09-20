@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <cstring>
 #include <ddraw.h>
 #include <math.h>
 #include <memory>
@@ -32,6 +33,8 @@ private:
     int _fps;
     LPDIRECTDRAWSURFACE4 _background;
     LPDIRECTDRAWSURFACE4 _tiles1;
+    LPDIRECTDRAWPALETTE _palette;
+    std::vector<PALETTEENTRY> _paletteEntries;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
@@ -44,7 +47,7 @@ void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dst
 #define blit(dstSurf, dstRect, srcSurf, srcRect, flags, fx) __blit(__FILE__, __LINE__, dstSurf, dstRect, srcSurf, srcRect, flags, fx)
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance), _running(false), _b(0.0f)
+    : IApp(hInstance), _running(false), _b(0.0f), _palette(nullptr)
 {
     InitializeCriticalSection(&_criticalSection);
 }
@@ -82,6 +85,10 @@ bool App::init()
         return false;
     }
 
+    trace("Loading palette from doge.pal...");
+    _paletteEntries = loadPalette("doge.pal");
+    assert(_paletteEntries.size() == 256);
+
     LPDIRECTDRAW ddraw;
     CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
     CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
@@ -94,6 +101,23 @@ bool App::init()
     ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
     CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
 
+    DDPIXELFORMAT pf;
+    memset(&pf, 0, sizeof(pf));
+    pf.dwSize = sizeof(pf);
+    CHECK(_primarySurf->GetPixelFormat(&pf));
+    if (pf.dwFlags & DDPF_PALETTEINDEXED8)
+    {
+        trace("Creating palette");
+        CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries.data(), &_palette, nullptr));
+
+        trace("Setting palette for primary surface");
+        CHECK(_primarySurf->SetPalette(_palette));
+    }
+    else if ((pf.dwFlags & DDPF_RGB) == 0)
+    {
+        panic("Unsupported pixel format");
+    }
+
     RECT cltRect;
     GetClientRect(hwnd, &cltRect);
 
@@ -104,17 +128,24 @@ bool App::init()
     ddsd.dwHeight = cltRect.bottom - cltRect.top;
     ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
     CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
+    if (_palette)
+    {
+        CHECK(_backSurf->SetPalette(_palette));
+    }
 
     CHECK(_ddraw->CreateClipper(0, &_clipper, nullptr));
     CHECK(_clipper->SetHWnd(0, hwnd));
     CHECK(_primarySurf->SetClipper(_clipper));
 
-    _background = loadBitmap("swatch.png");
-    _tiles1 = loadBitmap("tiles1.png");
+    trace("Loading swatch.dat");
+    _background = loadBitmap("swatch.dat");
+    trace("Loading tiles1.dat");
+    _tiles1 = loadBitmap("tiles1.dat");
 
     ShowWindow(hwnd, SW_SHOWDEFAULT);
     UpdateWindow(hwnd);
 
+    trace("Initialization done");
     _running = true;
     return true;
 }
@@ -188,6 +219,12 @@ void App::cleanup()
     {
         _backSurf->Release();
         _backSurf = nullptr;
+    }
+
+    if (_palette)
+    {
+        _palette->Release();
+        _palette = nullptr;
     }
 
     if (_ddraw)
@@ -335,10 +372,37 @@ void App::render()
 
 LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
 {
-    int width, height, bytesPerPixel;
-    unsigned char* data = stbi_load(name, &width, &height, &bytesPerPixel, 0);
-    assert(data != nullptr);
-    assert(bytesPerPixel == 3);
+    FILE* f = fopen(name, "rb");
+    if (!f)
+    {
+        panic("Failed to open file %s", name);
+    }
+
+    char debugInfo[16];
+    if (fread(debugInfo, sizeof(debugInfo), 1, f) != 1)
+    {
+        panic("Read error from %s", name);
+    }
+    trace("%s: %s", name, debugInfo);
+
+    int width;
+    if (fread(&width, sizeof(width), 1, f) != 1)
+    {
+        panic("Read error from %s", name);
+    }
+
+    int height;
+    if (fread(&height, sizeof(height), 1, f) != 1)
+    {
+        panic("Read error from %s", name);
+    }
+    trace("%s: %dx%d", name, width, height);
+
+    std::vector<uint8_t> data(width * height);
+    if (fread(data.data(), 1, data.size(), f) != data.size())
+    {
+        panic("Read error from %s", name);
+    }
 
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
@@ -350,25 +414,39 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
 
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
+    if (_palette)
+    {
+        trace("Tralalero tralala");
+        CHECK(surf->SetPalette(_palette));
+    }
 
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
     if (ddsd.ddpfPixelFormat.dwRGBBitCount == 8)
     {
-        panic("Not implemented yet");
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        const uint8_t* srcPtr = data.data();
+        for (int y = 0; y < height; y++)
+        {
+            uint8_t* scanline = dstPtr;
+            memcpy(scanline, srcPtr, width);
+            dstPtr += ddsd.lPitch;
+            srcPtr += width;
+        }
     }
     else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 16)
     {
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        uint8_t* srcPtr = data;
+        const uint8_t* srcPtr = data.data();
         for (int y = 0; y < height; y++)
         {
             uint16_t* scanline = reinterpret_cast<uint16_t*>(dstPtr);
             for (int x = 0; x < width; x++)
             {
-                uint32_t r = *srcPtr++;
-                uint32_t g = *srcPtr++;
-                uint32_t b = *srcPtr++;
-                *scanline = (b>>3) | ((g>>2) << 5) | ((r>>3) << 11);
+                auto color = _paletteEntries[*srcPtr++];
+                uint32_t r = color.peRed;
+                uint32_t g = color.peGreen;
+                uint32_t b = color.peBlue;
+                *scanline = (b >> 3) | ((g >> 2) << 5) | ((r >> 3) << 11);
                 scanline++;
             }
             dstPtr += ddsd.lPitch;
@@ -377,18 +455,16 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 24)
     {
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        uint8_t* srcPtr = data;
+        const uint8_t* srcPtr = data.data();
         for (int y = 0; y < height; y++)
         {
             uint8_t* scanline = reinterpret_cast<uint8_t*>(dstPtr);
             for (int x = 0; x < width; x++)
             {
-                uint8_t r = *srcPtr++;
-                uint8_t g = *srcPtr++;
-                uint8_t b = *srcPtr++;
-                *scanline++ = b;
-                *scanline++ = g;
-                *scanline++ = r;
+                auto color = _paletteEntries[*srcPtr++];
+                *scanline++ = color.peBlue;
+                *scanline++ = color.peGreen;
+                *scanline++ = color.peRed;
             }
 
             dstPtr += ddsd.lPitch;
@@ -397,16 +473,14 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 32)
     {
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        uint8_t* srcPtr = data;
+        const uint8_t* srcPtr = data.data();
         for (int y = 0; y < height; y++)
         {
             uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
             for (int x = 0; x < width; x++)
             {
-                uint8_t r = *srcPtr++;
-                uint8_t g = *srcPtr++;
-                uint8_t b = *srcPtr++;
-                *scanline++ = b | (g << 8) | (r << 16);
+                auto color = _paletteEntries[*srcPtr++];
+                *scanline++ = color.peBlue | (color.peGreen << 8) | (color.peRed << 16);
             }
             dstPtr += ddsd.lPitch;
         }
@@ -417,7 +491,6 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     }
 
     CHECK(surf->Unlock(nullptr));
-    stbi_image_free(data);
 
     return surf;
 }
