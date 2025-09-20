@@ -264,6 +264,7 @@ inline Size<int> getSurfaceSize(LPDIRECTDRAWSURFACE4 surf)
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_WIDTH|DDSD_HEIGHT;
     CHECK(surf->GetSurfaceDesc(&ddsd));
     return {(int)ddsd.dwWidth, (int)ddsd.dwHeight};
 }

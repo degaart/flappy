@@ -6,6 +6,8 @@
 #include <math.h>
 #include <memory>
 #include <stdint.h>
+#include <windows.h>
+#include <winerror.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
@@ -73,16 +75,8 @@ bool App::init()
     rcWindow.bottom = 480;
     AdjustWindowRect(&rcWindow, windowStyle, FALSE);
 
-    HWND hwnd = CreateWindowEx(0, 
-                               "MainWin", 
-                               "Zinzolu", 
-                               windowStyle, 
-                               CW_USEDEFAULT, 0, 
-                               rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, 
-                               nullptr,
-                               nullptr, 
-                               _hinstance, 
-                               this);
+    HWND hwnd = CreateWindowEx(0, "MainWin", "Zinzolu", windowStyle, CW_USEDEFAULT, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr,
+                               nullptr, _hinstance, this);
     if (!hwnd)
     {
         return false;
@@ -113,9 +107,9 @@ bool App::init()
 
     CHECK(_ddraw->CreateClipper(0, &_clipper, nullptr));
     CHECK(_clipper->SetHWnd(0, hwnd));
-    //CHECK(_primarySurf->SetClipper(_clipper));
+    CHECK(_primarySurf->SetClipper(_clipper));
 
-    _background = loadBitmap("doge.png");
+    _background = loadBitmap("swatch.png");
     _tiles1 = loadBitmap("tiles1.png");
 
     ShowWindow(hwnd, SW_SHOWDEFAULT);
@@ -221,7 +215,7 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     case WM_KEYUP:
         if (wparam == VK_ESCAPE)
         {
-            SendMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+            SendMessage(hwnd, WM_CLOSE, 0, 0);
         }
         else if (wparam == VK_F5)
         {
@@ -296,7 +290,6 @@ void App::render()
 
     backsurfSize = getSurfaceSize(_backSurf);
 
-
     /* Clear backbuffer */
     DDBLTFX fx;
     fx.dwSize = sizeof(fx);
@@ -320,11 +313,9 @@ void App::render()
     {
         CHECK(_background->Restore());
     }
-    //CHECK(_backSurf->Blt(&dstRect, _background, &srcRect, DDBLT_WAIT, nullptr));
     CHECK(_backSurf->BltFast(dstRect.left, dstRect.top, _background, &srcRect, DDBLTFAST_WAIT));
 
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d", _fps,
-            backsurfSize.width, backsurfSize.height);
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d", _fps, backsurfSize.width, backsurfSize.height);
 
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
@@ -337,8 +328,7 @@ void App::render()
     {
         CHECK(_primarySurf->Restore());
     }
-    //_primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
-    CHECK(_primarySurf->BltFast(rc.left, rc.top, _backSurf, nullptr, DDBLTFAST_WAIT));
+    _primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
 
     LeaveCriticalSection(&_criticalSection);
 }
@@ -361,22 +351,30 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
 
-    DDPIXELFORMAT pf;
-    pf.dwSize = sizeof(pf);
-    surf->GetPixelFormat(&pf);
-    trace("dwRGBBitCount: %u", pf.dwRGBBitCount);
-
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
-
-    if (pf.dwRGBBitCount == 8)
+    if (ddsd.ddpfPixelFormat.dwRGBBitCount == 8)
     {
         panic("Not implemented yet");
     }
-    else if (pf.dwRGBBitCount == 16)
+    else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 16)
     {
-        panic("Not implemented yet");
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        uint8_t* srcPtr = data;
+        for (int y = 0; y < height; y++)
+        {
+            uint16_t* scanline = reinterpret_cast<uint16_t*>(dstPtr);
+            for (int x = 0; x < width; x++)
+            {
+                uint32_t r = *srcPtr++;
+                uint32_t g = *srcPtr++;
+                uint32_t b = *srcPtr++;
+                *scanline = (b>>3) | ((g>>2) << 5) | ((r>>3) << 11);
+                scanline++;
+            }
+            dstPtr += ddsd.lPitch;
+        }
     }
-    else if (pf.dwRGBBitCount == 24)
+    else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 24)
     {
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
         uint8_t* srcPtr = data;
@@ -396,7 +394,7 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
             dstPtr += ddsd.lPitch;
         }
     }
-    else if (pf.dwRGBBitCount == 32)
+    else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 32)
     {
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
         uint8_t* srcPtr = data;
@@ -417,7 +415,6 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     {
         panic("Not implemented yet");
     }
-
 
     CHECK(surf->Unlock(nullptr));
     stbi_image_free(data);
