@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <ddraw.h>
 #include <math.h>
+#include <memory>
 #include <stdint.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -28,6 +29,7 @@ private:
     float _b;
     int _fps;
     LPDIRECTDRAWSURFACE4 _background;
+    LPDIRECTDRAWSURFACE4 _tiles1;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
@@ -111,10 +113,10 @@ bool App::init()
 
     CHECK(_ddraw->CreateClipper(0, &_clipper, nullptr));
     CHECK(_clipper->SetHWnd(0, hwnd));
-    CHECK(_primarySurf->SetClipper(_clipper));
+    //CHECK(_primarySurf->SetClipper(_clipper));
 
     _background = loadBitmap("doge.png");
-    //auto spriteSheet = loadBitmap("tiles1.png");
+    _tiles1 = loadBitmap("tiles1.png");
 
     ShowWindow(hwnd, SW_SHOWDEFAULT);
     UpdateWindow(hwnd);
@@ -154,7 +156,6 @@ int App::run()
             auto dT = 1.0 / 60.0;
             while (lag > dT)
             {
-                // trace("Updating, dT=%0.2f lag=%0.2f", dT, lag);
                 update(dT);
                 lag -= dT;
             }
@@ -172,16 +173,23 @@ int App::run()
             prevTime = beginTime;
         }
     }
-    // while (GetMessage(&msg, nullptr, 0, 0))
-    //{
-    //     TranslateMessage(&msg);
-    //     DispatchMessage(&msg);
-    // }
     return 0;
 }
 
 void App::cleanup()
 {
+    if (_tiles1)
+    {
+        _tiles1->Release();
+        _tiles1 = nullptr;
+    }
+
+    if (_background)
+    {
+        _background->Release();
+        _background = nullptr;
+    }
+
     if (_backSurf)
     {
         _backSurf->Release();
@@ -220,21 +228,12 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
             render();
         }
         return 0;
-        // case WM_PAINT:
-        //     onPaint(wparam, lparam);
-        //     return 0;
     }
     return std::nullopt;
 }
 
 void App::onPaint(WPARAM wparam, LPARAM lparam)
 {
-    // if (_running)
-    //{
-    //     assert(_primarySurf != nullptr);
-    //     assert(_backSurf != nullptr);
-    //     render();
-    // }
 }
 
 void App::update(double dT)
@@ -275,17 +274,12 @@ void App::render()
         rc.top = 0;
     }
 
-    DDSURFACEDESC2 ddsd;
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-    CHECK(_backSurf->GetSurfaceDesc(&ddsd));
-
-    auto backsurfWidth = ddsd.dwWidth;
-    auto backsurfHeight = ddsd.dwHeight;
-    if (backsurfWidth != rc.right - rc.left || backsurfHeight != rc.bottom - rc.top)
+    auto backsurfSize = getSurfaceSize(_backSurf);
+    if (backsurfSize.width != rc.right - rc.left || backsurfSize.height != rc.bottom - rc.top)
     {
         _backSurf->Release();
 
+        DDSURFACEDESC2 ddsd;
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
         ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
@@ -300,6 +294,9 @@ void App::render()
         CHECK(_backSurf->Restore());
     }
 
+    backsurfSize = getSurfaceSize(_backSurf);
+
+
     /* Clear backbuffer */
     DDBLTFX fx;
     fx.dwSize = sizeof(fx);
@@ -309,53 +306,25 @@ void App::render()
     RECT dstRect;
     dstRect.left = 0;
     dstRect.top = 0;
-    dstRect.right = 100;
-    dstRect.bottom = 100;
+    dstRect.right = std::min(640, backsurfSize.width);
+    dstRect.bottom = std::min(480, backsurfSize.height);
 
     RECT srcRect;
     srcRect.left = 0;
     srcRect.top = 0;
-    srcRect.right = 100;
-    srcRect.bottom = 100;
+    srcRect.right = dstRect.right;
+    srcRect.bottom = dstRect.bottom;
     assert(_background != nullptr);
 
-    //CHECK(_backSurf->Blt(&dstRect, _background, nullptr, DDBLT_WAIT, nullptr));
-    if (auto ret = _backSurf->Blt(&dstRect, _background, &srcRect, DDBLT_WAIT, nullptr); FAILED(ret))
+    if (_background->IsLost())
     {
-        trace("Blit failed: 0x%X %s. Rect: %ux%u %ux%u. Surface size: %ux%u",
-              ret, hresult2str(ret),
-              dstRect.left, dstRect.top,
-              dstRect.right, dstRect.bottom,
-              backsurfWidth, backsurfHeight);
+        CHECK(_background->Restore());
     }
+    //CHECK(_backSurf->Blt(&dstRect, _background, &srcRect, DDBLT_WAIT, nullptr));
+    CHECK(_backSurf->BltFast(dstRect.left, dstRect.top, _background, &srcRect, DDBLTFAST_WAIT));
 
-#if 0
-    /* Render pattern */
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-    CHECK(_backSurf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
-
-    uint8_t r = 0;
-    uint8_t g = 0;
-    uint8_t b = roundf(_b);
-    auto ptr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-
-    for (int y = 0; y < ddsd.dwHeight; y++)
-    {
-        uint32_t* line = reinterpret_cast<uint32_t*>(ptr);
-        for (int x = 0; x < ddsd.dwWidth; x++)
-        {
-            *line = b | (g << 8) | (r << 16) | (0xFF << 24);
-            line++;
-            r++;
-        }
-        g++;
-        ptr = reinterpret_cast<uint8_t*>(ptr) + ddsd.lPitch;
-    }
-    CHECK(_backSurf->Unlock(nullptr));
-#endif
-
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%ld h=%ld", _fps, ddsd.dwWidth, ddsd.dwHeight);
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d", _fps,
+            backsurfSize.width, backsurfSize.height);
 
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
@@ -368,7 +337,8 @@ void App::render()
     {
         CHECK(_primarySurf->Restore());
     }
-    _primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
+    //_primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
+    CHECK(_primarySurf->BltFast(rc.left, rc.top, _backSurf, nullptr, DDBLTFAST_WAIT));
 
     LeaveCriticalSection(&_criticalSection);
 }
@@ -380,35 +350,13 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     assert(data != nullptr);
     assert(bytesPerPixel == 3);
 
-    DDPIXELFORMAT ppf;
-    ppf.dwSize = sizeof(ppf);
-    CHECK(_primarySurf->GetPixelFormat(&ppf));
-    trace("dwFlags: 0x%X", ppf.dwFlags);
-    trace("dwRGBBitCount: %u", ppf.dwRGBBitCount);
-    trace("dwRBitMask: 0x%X", ppf.dwRBitMask);
-    trace("dwGBitMask: 0x%X", ppf.dwGBitMask);
-    trace("dwBBitMask: 0x%X", ppf.dwBBitMask);
-    trace("dwRGBAlphaBitMask: 0x%X", ppf.dwRGBAlphaBitMask);
-
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
     ddsd.dwWidth = width;
     ddsd.dwHeight = height;
     ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-    ddsd.ddpfPixelFormat.dwSize = sizeof(ddsd.ddpfPixelFormat);
-    ddsd.ddpfPixelFormat.dwFlags = DDPF_RGB;
-    //ddsd.ddpfPixelFormat.dwRGBBitCount = 32;
-    //ddsd.ddpfPixelFormat.dwRBitMask = 0xFF0000;
-    //ddsd.ddpfPixelFormat.dwGBitMask = 0xFF00;
-    //ddsd.ddpfPixelFormat.dwBBitMask = 0xFF;
-    //ddsd.ddpfPixelFormat.dwRGBAlphaBitMask = 0x0;
-    ddsd.ddpfPixelFormat.dwRGBBitCount = 24;
-    ddsd.ddpfPixelFormat.dwRBitMask = 0xFF0000;
-    ddsd.ddpfPixelFormat.dwGBitMask = 0xFF00;
-    ddsd.ddpfPixelFormat.dwBBitMask = 0xFF;
-    ddsd.ddpfPixelFormat.dwRGBAlphaBitMask = 0x0;
 
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
@@ -420,50 +368,56 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
 
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
 
-    uint8_t r = 0;
-    uint8_t g = 0;
-    uint8_t b = 0xFF;
-
-    // uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-    // for (int y = 0; y < height; y++)
-    // {
-    //     uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
-    //     for (int x = 0; x < width; x++)
-    //     {
-    //         *scanline = b | (g << 8) | (r << 16) | (0xFF << 24);
-    //         scanline++;
-    //     }
-    //     dstPtr += ddsd.lPitch;
-    // }
-
-    uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-    for (int y = 0; y < height; y++)
+    if (pf.dwRGBBitCount == 8)
     {
-        uint8_t* scanline = reinterpret_cast<uint8_t*>(dstPtr);
-        for (int x = 0; x < width; x++)
+        panic("Not implemented yet");
+    }
+    else if (pf.dwRGBBitCount == 16)
+    {
+        panic("Not implemented yet");
+    }
+    else if (pf.dwRGBBitCount == 24)
+    {
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        uint8_t* srcPtr = data;
+        for (int y = 0; y < height; y++)
         {
-            *scanline++ = b;
-            *scanline++ = g;
-            *scanline++ = r;
+            uint8_t* scanline = reinterpret_cast<uint8_t*>(dstPtr);
+            for (int x = 0; x < width; x++)
+            {
+                uint8_t r = *srcPtr++;
+                uint8_t g = *srcPtr++;
+                uint8_t b = *srcPtr++;
+                *scanline++ = b;
+                *scanline++ = g;
+                *scanline++ = r;
+            }
+
+            dstPtr += ddsd.lPitch;
         }
-        dstPtr += ddsd.lPitch;
+    }
+    else if (pf.dwRGBBitCount == 32)
+    {
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        uint8_t* srcPtr = data;
+        for (int y = 0; y < height; y++)
+        {
+            uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
+            for (int x = 0; x < width; x++)
+            {
+                uint8_t r = *srcPtr++;
+                uint8_t g = *srcPtr++;
+                uint8_t b = *srcPtr++;
+                *scanline++ = b | (g << 8) | (r << 16);
+            }
+            dstPtr += ddsd.lPitch;
+        }
+    }
+    else
+    {
+        panic("Not implemented yet");
     }
 
-    //if (ddsd.lPitch == width * 3)
-    //{
-    //    memcpy(ddsd.lpSurface, data, width * height * 3);
-    //}
-    //else
-    //{
-    //    uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-    //    const uint8_t* srcPtr = reinterpret_cast<const uint8_t*>(data);
-    //    for (int y = 0; y < height; y++)
-    //    {
-    //        memcpy(dstPtr, srcPtr, width * 3);
-    //        dstPtr += ddsd.lPitch;
-    //        srcPtr += width * 3;
-    //    }
-    //}
 
     CHECK(surf->Unlock(nullptr));
     stbi_image_free(data);

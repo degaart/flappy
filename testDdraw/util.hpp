@@ -71,7 +71,7 @@ static void __trace(const char* file, int line, const char* format, ...)
     printf("%s\n", buffer);
     fflush(stdout);
 
-    MessageBox(nullptr, buffer, "Panic", MB_OK | MB_ICONERROR);
+    //MessageBox(nullptr, buffer, "Panic", MB_OK | MB_ICONERROR);
     ExitProcess(1);
 }
 
@@ -229,7 +229,7 @@ inline const char* hresult2str(HRESULT hResult)
         auto ret = fn;                                                                                                                                         \
         if (FAILED(ret))                                                                                                                                       \
         {                                                                                                                                                      \
-            if (ret != DDERR_SURFACEBUSY)                                                                                            \
+            if (ret != DDERR_SURFACEBUSY)                                                                                                                      \
             {                                                                                                                                                  \
                 panic("%s failed: 0x%X %s", #fn, ret, hresult2str(ret));                                                                                       \
             }                                                                                                                                                  \
@@ -250,6 +250,22 @@ inline double getCurrentTime()
     }
 
     return counter.QuadPart / hrTimerFrequency;
+}
+
+template <typename T>
+struct Size
+{
+    T width;
+    T height;
+};
+
+inline Size<int> getSurfaceSize(LPDIRECTDRAWSURFACE4 surf)
+{
+    DDSURFACEDESC2 ddsd;
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    CHECK(surf->GetSurfaceDesc(&ddsd));
+    return {(int)ddsd.dwWidth, (int)ddsd.dwHeight};
 }
 
 class IApp
