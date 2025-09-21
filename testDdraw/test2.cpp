@@ -78,7 +78,7 @@ bool App::init()
     rcWindow.bottom = 480;
     AdjustWindowRect(&rcWindow, windowStyle, FALSE);
 
-    HWND hwnd = CreateWindowEx(0, "MainWin", "Zinzolu", windowStyle, CW_USEDEFAULT, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr,
+    HWND hwnd = CreateWindowEx(0, "MainWin", "Zinzolu", windowStyle, 0, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr,
                                nullptr, _hinstance, this);
     if (!hwnd)
     {
@@ -88,6 +88,18 @@ bool App::init()
     trace("Loading palette from doge.pal...");
     _paletteEntries = loadPalette("doge.pal");
     assert(_paletteEntries.size() == 256);
+
+    /* Adjust palette so the first and last 10 use windows' system palette colors */
+    for (int i = 0; i < 10; i++)
+    {
+        _paletteEntries[i].peFlags = PC_EXPLICIT;
+        _paletteEntries[i].peRed = i;
+        _paletteEntries[i].peGreen = _paletteEntries[i].peBlue = 0;
+
+        _paletteEntries[i+246].peFlags = PC_EXPLICIT;
+        _paletteEntries[i+246].peRed = i+246;
+        _paletteEntries[i+246].peGreen = _paletteEntries[i+246].peBlue = 0;
+    }
 
     LPDIRECTDRAW ddraw;
     CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
@@ -423,6 +435,25 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
     if (ddsd.ddpfPixelFormat.dwRGBBitCount == 8)
     {
+#if 0
+        /* 
+         * render an array of 16x16 colors on a 640x480 screen
+         * which means each cell will be 40x30
+         */
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        int color = 0;
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int cellX = x / 40;
+                int cellY = y / 30;
+                int color = (cellY * 16) + cellX;
+                *dstPtr++ = color;
+            }
+        }
+#endif
+
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
         const uint8_t* srcPtr = data.data();
         for (int y = 0; y < height; y++)
