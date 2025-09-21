@@ -1,0 +1,10 @@
+- Fix game resolution to 320x240x8 so we can use Mode-X in the DOS version
+
+TODO
+====
+- Fullscreen page flipping
+- Fullscreen toggle
+- Make window unresizeable
+- Add keys to zoom in and zoom out (in multiples of base screen size)
+- Split git repo
+

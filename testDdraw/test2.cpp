@@ -35,6 +35,7 @@ private:
     LPDIRECTDRAWSURFACE4 _tiles1;
     LPDIRECTDRAWPALETTE _palette;
     std::vector<PALETTEENTRY> _paletteEntries;
+    bool _fullscreen;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
@@ -48,7 +49,7 @@ void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dst
 #define blit(dstSurf, dstRect, srcSurf, srcRect, flags, fx) __blit(__FILE__, __LINE__, dstSurf, dstRect, srcSurf, srcRect, flags, fx)
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance), _running(false), _b(0.0f), _palette(nullptr)
+    : IApp(hInstance), _running(false), _b(0.0f), _palette(nullptr), _fullscreen(true)
 {
     InitializeCriticalSection(&_criticalSection);
 }
@@ -72,6 +73,10 @@ bool App::init()
     }
 
     auto windowStyle = WS_OVERLAPPEDWINDOW;
+    if (_fullscreen)
+    {
+        windowStyle = WS_POPUP;
+    }
     RECT rcWindow;
     rcWindow.left = 0;
     rcWindow.top = 0;
@@ -79,7 +84,7 @@ bool App::init()
     rcWindow.bottom = 480;
     AdjustWindowRect(&rcWindow, windowStyle, FALSE);
 
-    HWND hwnd = CreateWindowEx(0, "MainWin", "Zinzolu", windowStyle, 0, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr,
+    HWND hwnd = CreateWindowEx(0, "MainWin", "Flappy", windowStyle, 0, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr,
                                nullptr, _hinstance, this);
     if (!hwnd)
     {
@@ -105,7 +110,16 @@ bool App::init()
     LPDIRECTDRAW ddraw;
     CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
     CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
-    CHECK(ddraw->SetCooperativeLevel(hwnd, DDSCL_NORMAL));
+
+    if (_fullscreen)
+    {
+        CHECK(ddraw->SetCooperativeLevel(hwnd, DDSCL_FULLSCREEN|DDSCL_EXCLUSIVE|DDSCL_ALLOWREBOOT));
+        CHECK(ddraw->SetDisplayMode(640, 480, 8));
+    }
+    else
+    {
+        CHECK(ddraw->SetCooperativeLevel(hwnd, DDSCL_NORMAL));
+    }
 
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
