@@ -1,3 +1,5 @@
 /build_*
 .clangd
 /.wine
+/assets
+.nvim.lua
