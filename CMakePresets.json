@@ -43,11 +43,11 @@
             "name": "win95 debug",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
+            "toolchainFile": "mingw-w64.toolchain",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_WARN_DEPRECATED": "OFF",
-                "CMAKE_TOOLCHAIN_FILE": "mingw-w64.toolchain",
                 "ZORRO_ENGINE": "ddraw"
             }
         },
