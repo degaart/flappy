@@ -40,6 +40,7 @@ private:
     void onPaint(WPARAM, LPARAM);
     void update(double dT);
     void render();
+    void onZoom();
     LPDIRECTDRAWSURFACE4 loadBitmap(const char* name);
 };
 
@@ -270,6 +271,10 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         {
             render();
         }
+        else if (wparam == VK_F3)
+        {
+            onZoom();
+        }
         return 0;
     }
     return std::nullopt;
@@ -277,6 +282,37 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 
 void App::onPaint(WPARAM wparam, LPARAM lparam)
 {
+}
+
+void App::onZoom()
+{
+    RECT rc;
+    GetClientRect(_hwnd, &rc);
+
+    int width = rc.right - rc.left;
+    int height = rc.bottom - rc.top;
+    if (width > 640 || height > 480)
+    {
+        width = 640;
+        height = 480;
+    }
+    else if (width > 320 || height > 240)
+    {
+        width = 320;
+        height = 240;
+    }
+    else
+    {
+        width = 640;
+        height = 480;
+    }
+
+    rc.left = 0;
+    rc.right = width;
+    rc.top = 0;
+    rc.bottom = height;
+    AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+    SetWindowPos(_hwnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE|SWP_NOZORDER);
 }
 
 void App::update(double dT)
@@ -435,25 +471,6 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
     if (ddsd.ddpfPixelFormat.dwRGBBitCount == 8)
     {
-#if 0
-        /* 
-         * render an array of 16x16 colors on a 640x480 screen
-         * which means each cell will be 40x30
-         */
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        int color = 0;
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                int cellX = x / 40;
-                int cellY = y / 30;
-                int color = (cellY * 16) + cellX;
-                *dstPtr++ = color;
-            }
-        }
-#endif
-
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
         const uint8_t* srcPtr = data.data();
         for (int y = 0; y < height; y++)
