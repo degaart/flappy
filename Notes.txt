@@ -1,4 +1,6 @@
 - Fix game resolution to 320x240x8 so we can use Mode-X in the DOS version
+- No need to set palette of backbuffer and auxiliary surfaces: only the palette
+    of the primary surface is used if we dont switch
 
 Configure nvim
 ==============

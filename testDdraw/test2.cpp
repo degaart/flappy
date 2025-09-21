@@ -96,15 +96,18 @@ bool App::init()
     assert(_paletteEntries.size() == 256);
 
     /* Adjust palette so the first and last 10 use windows' system palette colors */
-    for (int i = 0; i < 10; i++)
+    if (!_fullscreen)
     {
-        _paletteEntries[i].peFlags = PC_EXPLICIT;
-        _paletteEntries[i].peRed = i;
-        _paletteEntries[i].peGreen = _paletteEntries[i].peBlue = 0;
+        for (int i = 0; i < 10; i++)
+        {
+            _paletteEntries[i].peFlags = PC_EXPLICIT;
+            _paletteEntries[i].peRed = i;
+            _paletteEntries[i].peGreen = _paletteEntries[i].peBlue = 0;
 
-        _paletteEntries[i+246].peFlags = PC_EXPLICIT;
-        _paletteEntries[i+246].peRed = i+246;
-        _paletteEntries[i+246].peGreen = _paletteEntries[i+246].peBlue = 0;
+            _paletteEntries[i+246].peFlags = PC_EXPLICIT;
+            _paletteEntries[i+246].peRed = i+246;
+            _paletteEntries[i+246].peGreen = _paletteEntries[i+246].peBlue = 0;
+        }
     }
 
     LPDIRECTDRAW ddraw;
@@ -124,8 +127,17 @@ bool App::init()
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+    if (_fullscreen)
+    {
+        ddsd.dwFlags = DDSD_CAPS|DDSD_BACKBUFFERCOUNT;
+        ddsd.dwBackBufferCount = 1;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE|DDSCAPS_COMPLEX|DDSCAPS_FLIP;
+    }
+    else
+    {
+        ddsd.dwFlags = DDSD_CAPS;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+    }
     CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
 
     DDPIXELFORMAT pf;
@@ -148,21 +160,27 @@ bool App::init()
     RECT cltRect;
     GetClientRect(hwnd, &cltRect);
 
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-    ddsd.dwWidth = cltRect.right - cltRect.left;
-    ddsd.dwHeight = cltRect.bottom - cltRect.top;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-    CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
-    if (_palette)
+    if (_fullscreen)
     {
-        CHECK(_backSurf->SetPalette(_palette));
+        DDSCAPS2 caps;
+        memset(&caps, 0, sizeof(caps));
+        caps.dwCaps = DDSCAPS_BACKBUFFER;
+        CHECK(_primarySurf->GetAttachedSurface(&caps, &_backSurf));
     }
+    else
+    {
+        memset(&ddsd, 0, sizeof(ddsd));
+        ddsd.dwSize = sizeof(ddsd);
+        ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+        ddsd.dwWidth = cltRect.right - cltRect.left;
+        ddsd.dwHeight = cltRect.bottom - cltRect.top;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+        CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
 
-    CHECK(_ddraw->CreateClipper(0, &_clipper, nullptr));
-    CHECK(_clipper->SetHWnd(0, hwnd));
-    CHECK(_primarySurf->SetClipper(_clipper));
+        CHECK(_ddraw->CreateClipper(0, &_clipper, nullptr));
+        CHECK(_clipper->SetHWnd(0, hwnd));
+        CHECK(_primarySurf->SetClipper(_clipper));
+    }
 
     trace("Loading swatch.dat");
     _background = loadBitmap("swatch.dat");
@@ -368,23 +386,30 @@ void App::render()
     }
 
     auto backsurfSize = getSurfaceSize(_backSurf);
-    if (backsurfSize.width != rc.right - rc.left || backsurfSize.height != rc.bottom - rc.top)
+    if (!_fullscreen)
     {
-        _backSurf->Release();
+        if (backsurfSize.width != rc.right - rc.left || backsurfSize.height != rc.bottom - rc.top)
+        {
+            _backSurf->Release();
 
-        DDSURFACEDESC2 ddsd;
-        memset(&ddsd, 0, sizeof(ddsd));
-        ddsd.dwSize = sizeof(ddsd);
-        ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-        ddsd.dwWidth = rc.right - rc.left;
-        ddsd.dwHeight = rc.bottom - rc.top;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-        CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
+            DDSURFACEDESC2 ddsd;
+            memset(&ddsd, 0, sizeof(ddsd));
+            ddsd.dwSize = sizeof(ddsd);
+            ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+            ddsd.dwWidth = rc.right - rc.left;
+            ddsd.dwHeight = rc.bottom - rc.top;
+            ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+            CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
+        }
+
+        /* Associated with the main surface in fullscreen mode */
+        if (_backSurf->IsLost())
+        {
+            CHECK(_backSurf->Restore());
+        }
     }
-
-    if (_backSurf->IsLost())
+    else
     {
-        CHECK(_backSurf->Restore());
     }
 
     backsurfSize = getSurfaceSize(_backSurf);
@@ -427,7 +452,21 @@ void App::render()
     {
         CHECK(_primarySurf->Restore());
     }
-    _primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr);
+
+    if (_fullscreen)
+    {
+        if (auto ret = _primarySurf->Flip(nullptr, DDFLIP_WAIT); FAILED(ret))
+        {
+            trace("Flip() failed: 0x%X %s", ret, hresult2str(ret));
+        }
+    }
+    else
+    {
+        if (auto ret = _primarySurf->Blt(&rc, _backSurf, nullptr, DDBLT_WAIT, nullptr); FAILED(ret))
+        {
+            trace("Blt failed: 0x%X %s", ret, hresult2str(ret));
+        }
+    }
 
     LeaveCriticalSection(&_criticalSection);
 }
@@ -476,11 +515,6 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
 
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
-    if (_palette)
-    {
-        trace("Tralalero tralala");
-        CHECK(surf->SetPalette(_palette));
-    }
 
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
     if (ddsd.ddpfPixelFormat.dwRGBBitCount == 8)
