@@ -1,5 +1,21 @@
 - Fix game resolution to 320x240x8 so we can use Mode-X in the DOS version
 
+Configure nvim
+==============
+
+Create .nvim.lua file with contents:
+
+vim.o.makeprg = 'cmake --build build_win95 --target testDdraw/test2'
+vim.keymap.set('n', '<F5>', ':!./wine.sh build_win95/testDdraw/test2.exe<CR>')
+
+
+Set compile_commands.json path for clangd
+=========================================
+- Create .clangd file:
+
+CompileFlags:
+  CompilationDatabase: build_win95
+
 TODO
 ====
 - Fullscreen page flipping
