@@ -20,9 +20,10 @@ CompileFlags:
 
 TODO
 ====
-- Fullscreen page flipping
-- Fullscreen toggle
-- Make window unresizeable
+- Fullscreen page flipping [OK]
+- Fullscreen toggle [FAIL]
+- Make window unresizeable [OK]
 - Add keys to zoom in and zoom out (in multiples of base screen size)
 - Split git repo
+- Change palette so we don't use reserved colors (and change swatch)
 

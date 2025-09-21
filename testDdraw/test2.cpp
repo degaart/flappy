@@ -26,16 +26,18 @@ private:
     LPDIRECTDRAW4 _ddraw;
     LPDIRECTDRAWSURFACE4 _primarySurf;
     LPDIRECTDRAWSURFACE4 _backSurf;
-    LPDIRECTDRAWCLIPPER _clipper;
+    LPDIRECTDRAWSURFACE4 _background;
+    LPDIRECTDRAWSURFACE4 _tiles1;
+    LPDIRECTDRAWPALETTE _palette;
     bool _running;
     CRITICAL_SECTION _criticalSection;
     float _b;
     int _fps;
-    LPDIRECTDRAWSURFACE4 _background;
-    LPDIRECTDRAWSURFACE4 _tiles1;
-    LPDIRECTDRAWPALETTE _palette;
     std::vector<PALETTEENTRY> _paletteEntries;
     bool _fullscreen;
+
+    static constexpr auto FULLSCREEN_STYLE = WS_POPUP;
+    static constexpr auto WINDOWED_STYLE = WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
@@ -43,13 +45,25 @@ private:
     void render();
     void onZoom();
     LPDIRECTDRAWSURFACE4 loadBitmap(const char* name);
+    void freeSurfaces();
+    void createSurfaces();
 };
 
 void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dstRect, LPDIRECTDRAWSURFACE4 srcSurf, LPRECT srcRect, DWORD flags, LPDDBLTFX fx);
 #define blit(dstSurf, dstRect, srcSurf, srcRect, flags, fx) __blit(__FILE__, __LINE__, dstSurf, dstRect, srcSurf, srcRect, flags, fx)
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance), _running(false), _b(0.0f), _palette(nullptr), _fullscreen(true)
+    : IApp(hInstance),
+      _ddraw(nullptr),
+      _primarySurf(nullptr),
+      _backSurf(nullptr),
+      _background(nullptr),
+      _tiles1(nullptr),
+      _palette(nullptr),
+      _running(false), 
+      _b(0.0f), 
+      _fullscreen(false)
+
 {
     InitializeCriticalSection(&_criticalSection);
 }
@@ -72,11 +86,8 @@ bool App::init()
         return false;
     }
 
-    auto windowStyle = WS_OVERLAPPEDWINDOW;
-    if (_fullscreen)
-    {
-        windowStyle = WS_POPUP;
-    }
+    auto windowStyle = _fullscreen ? FULLSCREEN_STYLE : WINDOWED_STYLE;
+
     RECT rcWindow;
     rcWindow.left = 0;
     rcWindow.top = 0;
@@ -91,101 +102,28 @@ bool App::init()
         return false;
     }
 
-    trace("Loading palette from doge.pal...");
+    LPDIRECTDRAW ddraw;
+    CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
+    CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
+    ddraw->Release();
+
+    /* Load palette */
     _paletteEntries = loadPalette("doge.pal");
     assert(_paletteEntries.size() == 256);
 
     /* Adjust palette so the first and last 10 use windows' system palette colors */
-    if (!_fullscreen)
+    for (int i = 0; i < 10; i++)
     {
-        for (int i = 0; i < 10; i++)
-        {
-            _paletteEntries[i].peFlags = PC_EXPLICIT;
-            _paletteEntries[i].peRed = i;
-            _paletteEntries[i].peGreen = _paletteEntries[i].peBlue = 0;
+        _paletteEntries[i].peFlags = PC_EXPLICIT;
+        _paletteEntries[i].peRed = i;
+        _paletteEntries[i].peGreen = _paletteEntries[i].peBlue = 0;
 
-            _paletteEntries[i+246].peFlags = PC_EXPLICIT;
-            _paletteEntries[i+246].peRed = i+246;
-            _paletteEntries[i+246].peGreen = _paletteEntries[i+246].peBlue = 0;
-        }
+        _paletteEntries[i+246].peFlags = PC_EXPLICIT;
+        _paletteEntries[i+246].peRed = i+246;
+        _paletteEntries[i+246].peGreen = _paletteEntries[i+246].peBlue = 0;
     }
 
-    LPDIRECTDRAW ddraw;
-    CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
-    CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
-
-    if (_fullscreen)
-    {
-        CHECK(ddraw->SetCooperativeLevel(hwnd, DDSCL_FULLSCREEN|DDSCL_EXCLUSIVE|DDSCL_ALLOWREBOOT));
-        CHECK(ddraw->SetDisplayMode(640, 480, 8));
-    }
-    else
-    {
-        CHECK(ddraw->SetCooperativeLevel(hwnd, DDSCL_NORMAL));
-    }
-
-    DDSURFACEDESC2 ddsd;
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-    if (_fullscreen)
-    {
-        ddsd.dwFlags = DDSD_CAPS|DDSD_BACKBUFFERCOUNT;
-        ddsd.dwBackBufferCount = 1;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE|DDSCAPS_COMPLEX|DDSCAPS_FLIP;
-    }
-    else
-    {
-        ddsd.dwFlags = DDSD_CAPS;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
-    }
-    CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
-
-    DDPIXELFORMAT pf;
-    memset(&pf, 0, sizeof(pf));
-    pf.dwSize = sizeof(pf);
-    CHECK(_primarySurf->GetPixelFormat(&pf));
-    if (pf.dwFlags & DDPF_PALETTEINDEXED8)
-    {
-        trace("Creating palette");
-        CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries.data(), &_palette, nullptr));
-
-        trace("Setting palette for primary surface");
-        CHECK(_primarySurf->SetPalette(_palette));
-    }
-    else if ((pf.dwFlags & DDPF_RGB) == 0)
-    {
-        panic("Unsupported pixel format");
-    }
-
-    RECT cltRect;
-    GetClientRect(hwnd, &cltRect);
-
-    if (_fullscreen)
-    {
-        DDSCAPS2 caps;
-        memset(&caps, 0, sizeof(caps));
-        caps.dwCaps = DDSCAPS_BACKBUFFER;
-        CHECK(_primarySurf->GetAttachedSurface(&caps, &_backSurf));
-    }
-    else
-    {
-        memset(&ddsd, 0, sizeof(ddsd));
-        ddsd.dwSize = sizeof(ddsd);
-        ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-        ddsd.dwWidth = cltRect.right - cltRect.left;
-        ddsd.dwHeight = cltRect.bottom - cltRect.top;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-        CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
-
-        CHECK(_ddraw->CreateClipper(0, &_clipper, nullptr));
-        CHECK(_clipper->SetHWnd(0, hwnd));
-        CHECK(_primarySurf->SetClipper(_clipper));
-    }
-
-    trace("Loading swatch.dat");
-    _background = loadBitmap("swatch.dat");
-    trace("Loading tiles1.dat");
-    _tiles1 = loadBitmap("tiles1.dat");
+    createSurfaces();
 
     ShowWindow(hwnd, SW_SHOWDEFAULT);
     UpdateWindow(hwnd);
@@ -248,29 +186,7 @@ int App::run()
 
 void App::cleanup()
 {
-    if (_tiles1)
-    {
-        _tiles1->Release();
-        _tiles1 = nullptr;
-    }
-
-    if (_background)
-    {
-        _background->Release();
-        _background = nullptr;
-    }
-
-    if (_backSurf)
-    {
-        _backSurf->Release();
-        _backSurf = nullptr;
-    }
-
-    if (_palette)
-    {
-        _palette->Release();
-        _palette = nullptr;
-    }
+    freeSurfaces();
 
     if (_ddraw)
     {
@@ -301,7 +217,13 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         }
         else if (wparam == VK_F5)
         {
-            render();
+            _fullscreen = !_fullscreen;
+            if (!_fullscreen)
+            {
+                CHECK(_ddraw->RestoreDisplayMode());
+            }
+
+            createSurfaces();
         }
         else if (wparam == VK_F3)
         {
@@ -318,6 +240,11 @@ void App::onPaint(WPARAM wparam, LPARAM lparam)
 
 void App::onZoom()
 {
+    if (_fullscreen)
+    {
+        return;
+    }
+
     RECT rc;
     GetClientRect(_hwnd, &rc);
 
@@ -343,7 +270,7 @@ void App::onZoom()
     rc.right = width;
     rc.top = 0;
     rc.bottom = height;
-    AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+    AdjustWindowRect(&rc, WINDOWED_STYLE, FALSE);
     SetWindowPos(_hwnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE|SWP_NOZORDER);
 }
 
@@ -589,6 +516,137 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     CHECK(surf->Unlock(nullptr));
 
     return surf;
+}
+
+void App::createSurfaces()
+{
+    trace("Creating surfaces");
+    freeSurfaces();
+
+    auto windowStyle = _fullscreen ? FULLSCREEN_STYLE : WINDOWED_STYLE;
+    SetWindowLong(_hwnd, GWL_STYLE, windowStyle);
+
+    if (_fullscreen)
+    {
+        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOSIZE|SWP_NOMOVE|SWP_FRAMECHANGED);
+
+        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_FULLSCREEN|DDSCL_EXCLUSIVE|DDSCL_ALLOWREBOOT));
+        CHECK(_ddraw->SetDisplayMode(640, 480, 8, 0, 0));
+
+        /* Create primary surface */
+        DDSURFACEDESC2 ddsd;
+        memset(&ddsd, 0, sizeof(ddsd));
+        ddsd.dwSize = sizeof(ddsd);
+        ddsd.dwFlags = DDSD_CAPS|DDSD_BACKBUFFERCOUNT;
+        ddsd.dwBackBufferCount = 1;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE|DDSCAPS_COMPLEX|DDSCAPS_FLIP;
+        CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
+    }
+    else
+    {
+        RECT rcWindow;
+        rcWindow.left = 0;
+        rcWindow.top = 0;
+        rcWindow.right = 640;
+        rcWindow.bottom = 480;
+        AdjustWindowRect(&rcWindow, windowStyle, FALSE);
+        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOMOVE|SWP_NOSIZE|SWP_FRAMECHANGED);
+
+        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_NORMAL));
+
+        /* Create primary surface */
+        DDSURFACEDESC2 ddsd;
+        memset(&ddsd, 0, sizeof(ddsd));
+        ddsd.dwSize = sizeof(ddsd);
+        ddsd.dwFlags = DDSD_CAPS;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+        CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
+    }
+
+    /* Set palette */
+    DDPIXELFORMAT pf;
+    memset(&pf, 0, sizeof(pf));
+    pf.dwSize = sizeof(pf);
+    CHECK(_primarySurf->GetPixelFormat(&pf));
+    if (pf.dwFlags & DDPF_PALETTEINDEXED8)
+    {
+        CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries.data(), &_palette, nullptr));
+        CHECK(_primarySurf->SetPalette(_palette));
+    }
+    else if ((pf.dwFlags & DDPF_RGB) == 0)
+    {
+        panic("Unsupported pixel format");
+    }
+
+    /* Create backsurface */
+    if (_fullscreen)
+    {
+        DDSCAPS2 caps;
+        memset(&caps, 0, sizeof(caps));
+        caps.dwCaps = DDSCAPS_BACKBUFFER;
+        CHECK(_primarySurf->GetAttachedSurface(&caps, &_backSurf));
+    }
+    else
+    {
+        RECT cltRect;
+        GetClientRect(_hwnd, &cltRect);
+
+        DDSURFACEDESC2 ddsd;
+        memset(&ddsd, 0, sizeof(ddsd));
+        ddsd.dwSize = sizeof(ddsd);
+        ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+        ddsd.dwWidth = cltRect.right - cltRect.left;
+        ddsd.dwHeight = cltRect.bottom - cltRect.top;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+        CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
+
+        LPDIRECTDRAWCLIPPER clipper;
+        CHECK(_ddraw->CreateClipper(0, &clipper, nullptr));
+        CHECK(clipper->SetHWnd(0, _hwnd));
+        CHECK(_primarySurf->SetClipper(clipper));
+        clipper->Release();
+    }
+
+    /* Load bitmaps */
+    trace("Loading swatch.dat");
+    _background = loadBitmap("swatch.dat");
+    trace("Loading tiles1.dat");
+    _tiles1 = loadBitmap("tiles1.dat");
+
+    trace("Done creating surfaces");
+}
+
+void App::freeSurfaces()
+{
+    if (_tiles1)
+    {
+        _tiles1->Release();
+        _tiles1 = nullptr;
+    }
+
+    if (_background)
+    {
+        _background->Release();
+        _background = nullptr;
+    }
+
+    if (_backSurf)
+    {
+        _backSurf->Release();
+        _backSurf = nullptr;
+    }
+
+    if (_primarySurf)
+    {
+        _primarySurf->Release();
+        _primarySurf = nullptr;
+    }
+
+    if (_palette)
+    {
+        _palette->Release();
+        _palette = nullptr;
+    }
 }
 
 std::unique_ptr<IApp> makeApp(HINSTANCE hInstance)
