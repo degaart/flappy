@@ -43,10 +43,10 @@ private:
     LPDIRECTDRAW4 _ddraw;
     LPDIRECTDRAWSURFACE4 _primarySurf;
     LPDIRECTDRAWSURFACE4 _backSurf;
-    LPDIRECTDRAWSURFACE4 _background;
-    LPDIRECTDRAWSURFACE4 _tiles1;
+    Bitmap _background;
+    Bitmap _tiles1;
     LPDIRECTDRAWPALETTE _palette;
-    std::vector<uint8_t> _workSurf;
+    Bitmap _framebuffer;
     bool _running;
     CRITICAL_SECTION _criticalSection;
     float _b;
@@ -79,8 +79,6 @@ App::App(HINSTANCE hInstance)
       _ddraw(nullptr),
       _primarySurf(nullptr),
       _backSurf(nullptr),
-      _background(nullptr),
-      _tiles1(nullptr),
       _palette(nullptr),
       _running(false), 
       _b(0.0f), 
@@ -88,7 +86,9 @@ App::App(HINSTANCE hInstance)
       _zoom(1)
 {
     InitializeCriticalSection(&_criticalSection);
-    _workSurf.insert(_workSurf.end(), BASE_WIDTH*BASE_HEIGHT, 0);
+    _framebuffer.w = BASE_WIDTH;
+    _framebuffer.h = BASE_HEIGHT;
+    _framebuffer.ptr.insert(_framebuffer.ptr.end(), _framebuffer.w * _framebuffer.h, '\0');
 }
 
 bool App::init()
@@ -301,6 +301,49 @@ void App::onZoom(bool zoomIn)
     createSurfaces();
 }
 
+static void blit8to8(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
+                     const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+                     const PALETTEENTRY* palette)
+{
+    panic("Not implemented yet");
+}
+
+static void blit8to16(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
+                      const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+                      const PALETTEENTRY* palette)
+{
+    panic("Not implemented yet");
+}
+
+static void blit8to24(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
+                      const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+                      const PALETTEENTRY* palette)
+{
+    panic("Not implemented yet");
+}
+
+static void blit8to32(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
+                      const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+                      const PALETTEENTRY* palette)
+{
+    if (dstWidth > srcWidth || dstHeight > srcHeight)
+    {
+        panic("TODO: Stretch");
+    }
+    
+    auto src = (const uint8_t*)srcPtr;
+    for (int y = 0; y < dstHeight; y++)
+    {
+        uint32_t* scanline = (uint32_t*)dstPtr;
+        for (int x = 0; x < dstWidth; x++)
+        {
+            auto color = palette[*src++];
+            *scanline++ = color.peBlue | (color.peGreen << 8) | (color.peRed << 16);
+        }
+        dstPtr = (uint8_t*)dstPtr + dstPitch;
+    }
+}
+
 void App::update(double dT)
 {
     _b += (dT * 128.0f);
@@ -363,38 +406,54 @@ void App::render()
             CHECK(_backSurf->Restore());
         }
     }
-    else
-    {
-    }
 
+    /* Render to framebuffer */
+    assert(_framebuffer.ptr.size() == _background.ptr.size());
+    memcpy(_framebuffer.ptr.data(), _background.ptr.data(), _background.w * _background.h);
+
+    /* Stretch and render framebuffer to backsurface */
     backsurfSize = getSurfaceSize(_backSurf);
 
-    /* Clear backbuffer */
-    DDBLTFX fx;
-    fx.dwSize = sizeof(fx);
-    fx.dwFillColor = 0xFFFFFFFF;
-    CHECK(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
-
-    RECT dstRect;
-    dstRect.left = 0;
-    dstRect.top = 0;
-    dstRect.right = MIN(BASE_WIDTH, backsurfSize.width);
-    dstRect.bottom = MIN(BASE_HEIGHT, backsurfSize.height);
-
-    RECT srcRect;
-    srcRect.left = 0;
-    srcRect.top = 0;
-    srcRect.right = dstRect.right;
-    srcRect.bottom = dstRect.bottom;
-    assert(_background != nullptr);
-
-    if (_background->IsLost())
+    DDSURFACEDESC2 ddsd;
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    CHECK(_backSurf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT, nullptr));
+    switch (ddsd.ddpfPixelFormat.dwRGBBitCount)
     {
-        CHECK(_background->Restore());
+        case 8:
+            blit8to8(ddsd.lpSurface,
+                     ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
+                     _framebuffer.ptr.data(),
+                     _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                     _paletteEntries.data());
+            break;
+        case 16:
+            blit8to16(ddsd.lpSurface,
+                      ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
+                      _framebuffer.ptr.data(),
+                      _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                      _paletteEntries.data());
+            break;
+        case 24:
+            blit8to24(ddsd.lpSurface,
+                      ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
+                      _framebuffer.ptr.data(),
+                      _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                      _paletteEntries.data());
+            break;
+        case 32:
+            blit8to32(ddsd.lpSurface,
+                      ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
+                      _framebuffer.ptr.data(),
+                      _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                      _paletteEntries.data());
+            break;
+        default:
+            panic("Unsupported pixel format");
     }
-    //CHECK(_backSurf->BltFast(dstRect.left, dstRect.top, _background, &srcRect, DDBLTFAST_WAIT));
-    CHECK(_backSurf->Blt(&dstRect, _background, &srcRect, DDBLT_WAIT, nullptr));
+    CHECK(_backSurf->Unlock(nullptr));
 
+    /* Debug text */
     stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d zoom=%d", _fps, backsurfSize.width, backsurfSize.height, _zoom);
 
     HDC hdc;
@@ -455,122 +514,15 @@ Bitmap App::loadBitmap(const char* name)
     }
     trace("%s: %dx%d", name, width, height);
 
-    std::vector<uint8_t> data(width * height);
-    if (fread(data.data(), 1, data.size(), f) != data.size())
+    Bitmap result;
+    result.w = width;
+    result.h = height;
+    result.ptr.insert(result.ptr.end(), width * height, '\0');
+    if (fread(result.ptr.data(), 1, result.ptr.size(), f) != result.ptr.size())
     {
         panic("Read error from %s", name);
     }
-    width = BASE_WIDTH;
-    height = BASE_HEIGHT;
-
-    DDSURFACEDESC2 ddsd;
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
-    ddsd.dwWidth = width;
-    ddsd.dwHeight = height;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-    ddsd.ddpfPixelFormat.dwSize = sizeof(ddsd.ddpfPixelFormat);
-    ddsd.ddpfPixelFormat.dwFlags = DDPF_PALETTEINDEXED8 | DDPF_RGB;
-    ddsd.ddpfPixelFormat.dwRGBBitCount = 8;
-
-    LPDIRECTDRAWSURFACE4 surf;
-    CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
-
-    CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_WAIT | DDLOCK_SURFACEMEMORYPTR, nullptr));
-    if (ddsd.ddpfPixelFormat.dwRGBBitCount == 8)
-    {
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        const uint8_t* srcPtr = data.data();
-        for (int y = 0; y < height; y++)
-        {
-            uint8_t* scanline = dstPtr;
-            memcpy(scanline, srcPtr, width);
-            dstPtr += ddsd.lPitch;
-            srcPtr += width;
-        }
-    }
-    else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 16)
-    {
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        const uint8_t* srcPtr = data.data();
-        for (int y = 0; y < height; y++)
-        {
-            uint16_t* scanline = reinterpret_cast<uint16_t*>(dstPtr);
-            for (int x = 0; x < width; x++)
-            {
-                auto color = _paletteEntries[*srcPtr++];
-                uint32_t r = color.peRed;
-                uint32_t g = color.peGreen;
-                uint32_t b = color.peBlue;
-                *scanline = (b >> 3) | ((g >> 2) << 5) | ((r >> 3) << 11);
-                scanline++;
-            }
-            dstPtr += ddsd.lPitch;
-        }
-    }
-    else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 24)
-    {
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        const uint8_t* srcPtr = data.data();
-        for (int y = 0; y < height; y++)
-        {
-            uint8_t* scanline = reinterpret_cast<uint8_t*>(dstPtr);
-            for (int x = 0; x < width; x++)
-            {
-                auto color = _paletteEntries[*srcPtr++];
-                *scanline++ = color.peBlue;
-                *scanline++ = color.peGreen;
-                *scanline++ = color.peRed;
-            }
-
-            dstPtr += ddsd.lPitch;
-        }
-    }
-    else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 32)
-    {
-        // 320 / 16 = 20
-        // 240 / 16 = 15
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        for (int y = 0; y < height; y++)
-        {
-            int cellY = y / 15;
-
-            uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
-            for (int x = 0; x < width; x++)
-            {
-                int cellX = x / 20;
-                int color = (cellY * 16) + cellX;
-                *scanline++ = _paletteEntries[color].peBlue |
-                    (_paletteEntries[color].peGreen << 8) |
-                    (_paletteEntries[color].peRed << 16);
-            }
-            dstPtr += ddsd.lPitch;
-        }
-
-#if 0
-        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
-        const uint8_t* srcPtr = data.data();
-        for (int y = 0; y < height; y++)
-        {
-            uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
-            for (int x = 0; x < width; x++)
-            {
-                auto color = _paletteEntries[*srcPtr++];
-                *scanline++ = color.peBlue | (color.peGreen << 8) | (color.peRed << 16);
-            }
-            dstPtr += ddsd.lPitch;
-        }
-#endif
-    }
-    else
-    {
-        panic("Not implemented yet");
-    }
-
-    CHECK(surf->Unlock(nullptr));
-
-    return surf;
+    return result;
 }
 
 void App::createSurfaces()
@@ -671,16 +623,6 @@ void App::createSurfaces()
         clipper->Release();
     }
 
-    ///* Create worksurface */
-    //DDSURFACEDESC2 ddsd;
-    //memset(&ddsd, 0, sizeof(ddsd));
-    //ddsd.dwSize = sizeof(ddsd);
-    //ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
-    //ddsd.dwWidth = BASE_WIDTH;
-    //ddsd.dwHeight = BASE_HEIGHT;
-    //ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-    //CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
-
     /* Load bitmaps */
     trace("Loading swatch.dat");
     _background = loadBitmap("swatch.dat");
@@ -692,24 +634,6 @@ void App::createSurfaces()
 
 void App::freeSurfaces()
 {
-    if (_tiles1)
-    {
-        _tiles1->Release();
-        _tiles1 = nullptr;
-    }
-
-    if (_background)
-    {
-        _background->Release();
-        _background = nullptr;
-    }
-
-    if (_workSurf)
-    {
-        _workSurf->Release();
-        _workSurf = nullptr;
-    }
-
     if (_backSurf)
     {
         _backSurf->Release();
