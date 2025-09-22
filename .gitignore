@@ -1,5 +1,6 @@
-/build_*
-.clangd
+/.cache
+/.clangd
+/.nvim.lua
 /.wine
 /assets
-.nvim.lua
+/build*

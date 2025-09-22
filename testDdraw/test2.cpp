@@ -125,9 +125,6 @@ bool App::init()
 
     createSurfaces();
 
-    ShowWindow(hwnd, SW_SHOWDEFAULT);
-    UpdateWindow(hwnd);
-
     trace("Initialization done");
     _running = true;
     return true;
@@ -350,8 +347,8 @@ void App::render()
     RECT dstRect;
     dstRect.left = 0;
     dstRect.top = 0;
-    dstRect.right = std::min(640, backsurfSize.width);
-    dstRect.bottom = std::min(480, backsurfSize.height);
+    dstRect.right = MIN(640, backsurfSize.width);
+    dstRect.bottom = MIN(480, backsurfSize.height);
 
     RECT srcRect;
     srcRect.left = 0;
@@ -544,15 +541,21 @@ void App::createSurfaces()
     }
     else
     {
+        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_NORMAL));
+
+        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOSIZE|SWP_NOMOVE|SWP_FRAMECHANGED);
+
         RECT rcWindow;
         rcWindow.left = 0;
         rcWindow.top = 0;
         rcWindow.right = 640;
         rcWindow.bottom = 480;
         AdjustWindowRect(&rcWindow, windowStyle, FALSE);
-        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOMOVE|SWP_NOSIZE|SWP_FRAMECHANGED);
+        SetWindowPos(_hwnd, nullptr, 0, 0,
+                rcWindow.right - rcWindow.left, 
+                rcWindow.bottom - rcWindow.top,
+                SWP_NOZORDER|SWP_NOMOVE);
 
-        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_NORMAL));
 
         /* Create primary surface */
         DDSURFACEDESC2 ddsd;
@@ -562,6 +565,9 @@ void App::createSurfaces()
         ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
         CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
     }
+
+    ShowWindow(_hwnd, SW_SHOWDEFAULT);
+    UpdateWindow(_hwnd);
 
     /* Set palette */
     DDPIXELFORMAT pf;

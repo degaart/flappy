@@ -401,6 +401,14 @@ inline std::vector<PALETTEENTRY> loadPalette(const char* filename)
     return result;
 }
 
+#ifndef MIN
+#   define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef MAX
+#   define MAX(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
 #ifndef UTIL_NOAPP
 class IApp
 {
