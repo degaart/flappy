@@ -21,7 +21,7 @@ CompileFlags:
 TODO
 ====
 - Fullscreen page flipping [OK]
-- Fullscreen toggle [FAIL]
+- Fullscreen toggle [FIXED]
 - Make window unresizeable [OK]
 - Add keys to zoom in and zoom out (in multiples of base screen size)
 - Split git repo

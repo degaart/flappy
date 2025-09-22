@@ -14,6 +14,23 @@
 #define STBI_ONLY_PNG
 #include "../stb_image.h"
 
+/*
+ * We have 4 categories of surfaces:
+ *  - primarySurface: surface which is displayed on screen
+ *  - backbuffer: surface with the same geometry as primary surface, where the worksurface will be rendered
+ *  - worksurface: surface where we render. Fixed geometry of 320x240x8
+ *  - offscreen surface: surface to be blitted to worksurface
+ *
+ *  As a special case for optimization: if backbuffer has geometry 320x240x8, we skip worksurface and render
+ *  directly into it
+ */
+
+struct Bitmap
+{
+    int w, h;
+    std::vector<uint8_t> ptr;
+};
+
 class App : public IApp
 {
 public:
@@ -29,12 +46,17 @@ private:
     LPDIRECTDRAWSURFACE4 _background;
     LPDIRECTDRAWSURFACE4 _tiles1;
     LPDIRECTDRAWPALETTE _palette;
+    std::vector<uint8_t> _workSurf;
     bool _running;
     CRITICAL_SECTION _criticalSection;
     float _b;
     int _fps;
     std::vector<PALETTEENTRY> _paletteEntries;
     bool _fullscreen;
+    int _zoom;
+
+    static constexpr auto BASE_WIDTH = 320;
+    static constexpr auto BASE_HEIGHT = 240;
 
     static constexpr auto FULLSCREEN_STYLE = WS_POPUP;
     static constexpr auto WINDOWED_STYLE = WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX;
@@ -43,8 +65,8 @@ private:
     void onPaint(WPARAM, LPARAM);
     void update(double dT);
     void render();
-    void onZoom();
-    LPDIRECTDRAWSURFACE4 loadBitmap(const char* name);
+    void onZoom(bool zoomIn);
+    Bitmap loadBitmap(const char* name);
     void freeSurfaces();
     void createSurfaces();
 };
@@ -62,10 +84,11 @@ App::App(HINSTANCE hInstance)
       _palette(nullptr),
       _running(false), 
       _b(0.0f), 
-      _fullscreen(false)
-
+      _fullscreen(false),
+      _zoom(1)
 {
     InitializeCriticalSection(&_criticalSection);
+    _workSurf.insert(_workSurf.end(), BASE_WIDTH*BASE_HEIGHT, 0);
 }
 
 bool App::init()
@@ -91,12 +114,15 @@ bool App::init()
     RECT rcWindow;
     rcWindow.left = 0;
     rcWindow.top = 0;
-    rcWindow.right = 640;
-    rcWindow.bottom = 480;
+    rcWindow.right = BASE_WIDTH * _zoom;
+    rcWindow.bottom = BASE_HEIGHT * _zoom;
     AdjustWindowRect(&rcWindow, windowStyle, FALSE);
 
-    HWND hwnd = CreateWindowEx(0, "MainWin", "Flappy", windowStyle, 0, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr,
-                               nullptr, _hinstance, this);
+    HWND hwnd = CreateWindowEx(0, 
+            "MainWin", "Flappy", windowStyle, 
+            0, 0, 
+            rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, 
+            nullptr, nullptr, _hinstance, this);
     if (!hwnd)
     {
         return false;
@@ -222,10 +248,15 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 
             createSurfaces();
         }
-        else if (wparam == VK_F3)
+        else if (wparam == VK_F6)
         {
-            onZoom();
+            onZoom(true);
         }
+        else if (wparam == VK_F7)
+        {
+            onZoom(false);
+        }
+
         return 0;
     }
     return std::nullopt;
@@ -235,40 +266,39 @@ void App::onPaint(WPARAM wparam, LPARAM lparam)
 {
 }
 
-void App::onZoom()
+void App::onZoom(bool zoomIn)
 {
     if (_fullscreen)
     {
         return;
     }
 
-    RECT rc;
-    GetClientRect(_hwnd, &rc);
-
-    int width = rc.right - rc.left;
-    int height = rc.bottom - rc.top;
-    if (width > 640 || height > 480)
+    if (zoomIn)
     {
-        width = 640;
-        height = 480;
-    }
-    else if (width > 320 || height > 240)
-    {
-        width = 320;
-        height = 240;
+        _zoom++;
     }
     else
     {
-        width = 640;
-        height = 480;
+        _zoom--;
     }
 
+    if (_zoom < 1)
+    {
+        _zoom = 1;
+    }
+    else if (_zoom > 8)
+    {
+        _zoom = 8;
+    }
+
+    RECT rc;
     rc.left = 0;
-    rc.right = width;
+    rc.right = BASE_WIDTH * _zoom;
     rc.top = 0;
-    rc.bottom = height;
+    rc.bottom = BASE_HEIGHT * _zoom;
     AdjustWindowRect(&rc, WINDOWED_STYLE, FALSE);
     SetWindowPos(_hwnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE|SWP_NOZORDER);
+    createSurfaces();
 }
 
 void App::update(double dT)
@@ -312,6 +342,7 @@ void App::render()
     auto backsurfSize = getSurfaceSize(_backSurf);
     if (!_fullscreen)
     {
+        /* Recreate if primary surface's size changed */
         if (backsurfSize.width != rc.right - rc.left || backsurfSize.height != rc.bottom - rc.top)
         {
             _backSurf->Release();
@@ -347,8 +378,8 @@ void App::render()
     RECT dstRect;
     dstRect.left = 0;
     dstRect.top = 0;
-    dstRect.right = MIN(640, backsurfSize.width);
-    dstRect.bottom = MIN(480, backsurfSize.height);
+    dstRect.right = MIN(BASE_WIDTH, backsurfSize.width);
+    dstRect.bottom = MIN(BASE_HEIGHT, backsurfSize.height);
 
     RECT srcRect;
     srcRect.left = 0;
@@ -361,9 +392,10 @@ void App::render()
     {
         CHECK(_background->Restore());
     }
-    CHECK(_backSurf->BltFast(dstRect.left, dstRect.top, _background, &srcRect, DDBLTFAST_WAIT));
+    //CHECK(_backSurf->BltFast(dstRect.left, dstRect.top, _background, &srcRect, DDBLTFAST_WAIT));
+    CHECK(_backSurf->Blt(&dstRect, _background, &srcRect, DDBLT_WAIT, nullptr));
 
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d", _fps, backsurfSize.width, backsurfSize.height);
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d zoom=%d", _fps, backsurfSize.width, backsurfSize.height, _zoom);
 
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
@@ -395,7 +427,7 @@ void App::render()
     LeaveCriticalSection(&_criticalSection);
 }
 
-LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
+Bitmap App::loadBitmap(const char* name)
 {
     FILE* f = fopen(name, "rb");
     if (!f)
@@ -428,14 +460,19 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     {
         panic("Read error from %s", name);
     }
+    width = BASE_WIDTH;
+    height = BASE_HEIGHT;
 
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
     ddsd.dwWidth = width;
     ddsd.dwHeight = height;
     ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.ddpfPixelFormat.dwSize = sizeof(ddsd.ddpfPixelFormat);
+    ddsd.ddpfPixelFormat.dwFlags = DDPF_PALETTEINDEXED8 | DDPF_RGB;
+    ddsd.ddpfPixelFormat.dwRGBBitCount = 8;
 
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
@@ -492,6 +529,26 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
     }
     else if (ddsd.ddpfPixelFormat.dwRGBBitCount == 32)
     {
+        // 320 / 16 = 20
+        // 240 / 16 = 15
+        uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
+        for (int y = 0; y < height; y++)
+        {
+            int cellY = y / 15;
+
+            uint32_t* scanline = reinterpret_cast<uint32_t*>(dstPtr);
+            for (int x = 0; x < width; x++)
+            {
+                int cellX = x / 20;
+                int color = (cellY * 16) + cellX;
+                *scanline++ = _paletteEntries[color].peBlue |
+                    (_paletteEntries[color].peGreen << 8) |
+                    (_paletteEntries[color].peRed << 16);
+            }
+            dstPtr += ddsd.lPitch;
+        }
+
+#if 0
         uint8_t* dstPtr = reinterpret_cast<uint8_t*>(ddsd.lpSurface);
         const uint8_t* srcPtr = data.data();
         for (int y = 0; y < height; y++)
@@ -504,6 +561,7 @@ LPDIRECTDRAWSURFACE4 App::loadBitmap(const char* name)
             }
             dstPtr += ddsd.lPitch;
         }
+#endif
     }
     else
     {
@@ -528,7 +586,7 @@ void App::createSurfaces()
         SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOSIZE|SWP_NOMOVE|SWP_FRAMECHANGED);
 
         CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_FULLSCREEN|DDSCL_EXCLUSIVE|DDSCL_ALLOWREBOOT));
-        CHECK(_ddraw->SetDisplayMode(640, 480, 8, 0, 0));
+        CHECK(_ddraw->SetDisplayMode(BASE_WIDTH*2, BASE_HEIGHT*2, 8, 0, 0));
 
         /* Create primary surface */
         DDSURFACEDESC2 ddsd;
@@ -548,8 +606,8 @@ void App::createSurfaces()
         RECT rcWindow;
         rcWindow.left = 0;
         rcWindow.top = 0;
-        rcWindow.right = 640;
-        rcWindow.bottom = 480;
+        rcWindow.right = BASE_WIDTH * _zoom;
+        rcWindow.bottom = BASE_HEIGHT * _zoom;
         AdjustWindowRect(&rcWindow, windowStyle, FALSE);
         SetWindowPos(_hwnd, nullptr, 0, 0,
                 rcWindow.right - rcWindow.left, 
@@ -613,6 +671,16 @@ void App::createSurfaces()
         clipper->Release();
     }
 
+    ///* Create worksurface */
+    //DDSURFACEDESC2 ddsd;
+    //memset(&ddsd, 0, sizeof(ddsd));
+    //ddsd.dwSize = sizeof(ddsd);
+    //ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
+    //ddsd.dwWidth = BASE_WIDTH;
+    //ddsd.dwHeight = BASE_HEIGHT;
+    //ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    //CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
+
     /* Load bitmaps */
     trace("Loading swatch.dat");
     _background = loadBitmap("swatch.dat");
@@ -634,6 +702,12 @@ void App::freeSurfaces()
     {
         _background->Release();
         _background = nullptr;
+    }
+
+    if (_workSurf)
+    {
+        _workSurf->Release();
+        _workSurf = nullptr;
     }
 
     if (_backSurf)
