@@ -23,7 +23,10 @@ TODO
 - Fullscreen page flipping [OK]
 - Fullscreen toggle [FIXED]
 - Make window unresizeable [OK]
-- Add keys to zoom in and zoom out (in multiples of base screen size)
-- Split git repo
+- Add keys to zoom in and zoom out [OK]
+- Split git repo [OK]
 - Change palette so we don't use reserved colors (and change swatch)
+- Custom blit color key support [OK]
+- Implement surface abstraction so we can blit
+
 

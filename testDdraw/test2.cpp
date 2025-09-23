@@ -1,7 +1,6 @@
 #include "fixed16.hpp"
 #include "util.hpp"
 
-#include <algorithm>
 #include <assert.h>
 #include <cstring>
 #include <ddraw.h>
@@ -50,11 +49,13 @@ private:
     Bitmap _framebuffer;
     bool _running;
     CRITICAL_SECTION _criticalSection;
-    float _b;
     int _fps;
     std::vector<PALETTEENTRY> _paletteEntries;
     bool _fullscreen;
     int _zoom;
+    double _currentTime;
+    float _tileX;
+    float _tileY;
 
     static constexpr auto BASE_WIDTH = 320;
     static constexpr auto BASE_HEIGHT = 240;
@@ -76,7 +77,17 @@ void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dst
 #define blit(dstSurf, dstRect, srcSurf, srcRect, flags, fx) __blit(__FILE__, __LINE__, dstSurf, dstRect, srcSurf, srcRect, flags, fx)
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance), _ddraw(nullptr), _primarySurf(nullptr), _backSurf(nullptr), _palette(nullptr), _running(false), _b(0.0f), _fullscreen(false), _zoom(1)
+    : IApp(hInstance),
+      _ddraw(nullptr),
+      _primarySurf(nullptr),
+      _backSurf(nullptr),
+      _palette(nullptr),
+      _running(false),
+      _fullscreen(false),
+      _zoom(1),
+      _tileX(0),
+      _tileY(0),
+      _currentTime(0)
 {
     InitializeCriticalSection(&_criticalSection);
     _framebuffer.w = BASE_WIDTH;
@@ -291,6 +302,137 @@ void App::onZoom(bool zoomIn)
     createSurfaces();
 }
 
+/*
+ * A blit that does not support scaling nor different BPP
+ * But does support colorKey
+ */
+static void fastBlit(void* dstPtr, int dstX, int dstY, int dstWidth, int dstHeight, int dstMaxWidth, int dstMaxHeight, const void* srcPtr, int srcX, int srcY,
+                     int srcMaxWidth, int srcMaxHeight, std::optional<int> colorKey = std::nullopt)
+{
+    if (!dstPtr || !srcPtr)
+    {
+        return;
+    }
+    if (dstWidth <= 0 || dstHeight <= 0 || dstMaxWidth <= 0 || dstMaxHeight <= 0 || srcMaxWidth <= 0 || srcMaxHeight <= 0)
+    {
+        return;
+    }
+
+    auto dst = static_cast<uint8_t*>(dstPtr);
+    auto src = static_cast<const uint8_t*>(srcPtr);
+
+    int sx = srcX;
+    int sy = srcY;
+    int dx = dstX;
+    int dy = dstY;
+    int w = dstWidth;
+    int h = dstHeight;
+
+    // Clip left/top against destination bounds
+    if (dx < 0)
+    {
+        int shift = -dx;
+        dx = 0;
+        sx += shift;
+        w -= shift;
+    }
+    if (dy < 0)
+    {
+        int shift = -dy;
+        dy = 0;
+        sy += shift;
+        h -= shift;
+    }
+
+    // Clip left/top against source bounds
+    if (sx < 0)
+    {
+        int shift = -sx;
+        sx = 0;
+        dx += shift;
+        w -= shift;
+    }
+    if (sy < 0)
+    {
+        int shift = -sy;
+        sy = 0;
+        dy += shift;
+        h -= shift;
+    }
+
+    // Clip right/bottom against destination bounds
+    if (dx + w > dstMaxWidth)
+    {
+        w = dstMaxWidth - dx;
+    }
+    if (dy + h > dstMaxHeight)
+    {
+        h = dstMaxHeight - dy;
+    }
+
+    // Clip right/bottom against source bounds
+    if (sx + w > srcMaxWidth)
+    {
+        w = srcMaxWidth - sx;
+    }
+    if (sy + h > srcMaxHeight)
+    {
+        h = srcMaxHeight - sy;
+    }
+
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+
+    const bool useColorKey = colorKey.has_value();
+    uint8_t key = useColorKey ? *colorKey : 0;
+
+    const size_t copyBytesPerRow = static_cast<size_t>(w);
+
+    // Fast path: no color key, contiguous row copy possible
+    if (!useColorKey)
+    {
+        // Determine if rows are contiguous and non-overlapping for memcpy
+        for (int row = 0; row < h; ++row)
+        {
+            const uint8_t* sRow = src + (static_cast<size_t>(sy + row) * static_cast<size_t>(srcMaxWidth) + static_cast<size_t>(sx));
+            uint8_t* dRow = dst + (static_cast<size_t>(dy + row) * static_cast<size_t>(dstMaxWidth) + static_cast<size_t>(dx));
+
+            // If src and dst memory regions do not overlap, use memcpy otherwise memmove.
+            const uintptr_t sStart = reinterpret_cast<uintptr_t>(sRow);
+            const uintptr_t sEnd = sStart + copyBytesPerRow;
+            const uintptr_t dStart = reinterpret_cast<uintptr_t>(dRow);
+            const uintptr_t dEnd = dStart + copyBytesPerRow;
+
+            if (sEnd <= dStart || dEnd <= sStart)
+            {
+                memcpy(dRow, sRow, copyBytesPerRow);
+            }
+            else
+            {
+                memmove(dRow, sRow, copyBytesPerRow);
+            }
+        }
+        return;
+    }
+
+    // Color-keyed path
+    for (int row = 0; row < h; ++row)
+    {
+        const uint8_t* sRow = src + (static_cast<size_t>(sy + row) * static_cast<size_t>(srcMaxWidth) + static_cast<size_t>(sx));
+        uint8_t* dRow = dst + (static_cast<size_t>(dy + row) * static_cast<size_t>(dstMaxWidth) + static_cast<size_t>(dx));
+        for (size_t i = 0; i < copyBytesPerRow; ++i)
+        {
+            uint8_t s = sRow[i];
+            if (s != key)
+            {
+                dRow[i] = s;
+            }
+        }
+    }
+}
+
 static void blit8to8(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
                      const PALETTEENTRY* palette)
 {
@@ -435,11 +577,9 @@ void blit8to32(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const vo
 
 void App::update(double dT)
 {
-    _b += (dT * 128.0f);
-    while (_b > 255.0f)
-    {
-        _b -= 255.0f;
-    }
+    _currentTime += dT;
+    _tileX = 100 + (sin(_currentTime) * 100);
+    _tileY = 100 + (cos(_currentTime) * 100);
 }
 
 void App::render()
@@ -498,7 +638,13 @@ void App::render()
 
     /* Render to framebuffer */
     assert(_framebuffer.ptr.size() == _background.ptr.size());
-    memcpy(_framebuffer.ptr.data(), _background.ptr.data(), _background.w * _background.h);
+    fastBlit(_framebuffer.ptr.data(), 0, 0, _framebuffer.w, _framebuffer.h, _framebuffer.w, _framebuffer.h, _background.ptr.data(), 0, 0, _background.w,
+             _background.h);
+    fastBlit(_framebuffer.ptr.data(), roundf(_tileX), roundf(_tileY), _tiles1.w, _tiles1.h, _framebuffer.w, _framebuffer.h,
+             _tiles1.ptr.data(), 0, 0, _tiles1.w, _tiles1.h,
+             195);
+
+    // memcpy(_framebuffer.ptr.data(), _background.ptr.data(), _background.w * _background.h);
 
     /* Stretch and render framebuffer to backsurface */
     backsurfSize = getSurfaceSize(_backSurf);
@@ -531,7 +677,7 @@ void App::render()
     CHECK(_backSurf->Unlock(nullptr));
 
     /* Debug text */
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d zoom=%d", _fps, backsurfSize.width, backsurfSize.height, _zoom);
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d zoom=%d tilex=%0.2f tiley=%0.2f", _fps, backsurfSize.width, backsurfSize.height, _zoom, _tileX, _tileY);
 
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
