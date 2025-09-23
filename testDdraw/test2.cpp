@@ -45,6 +45,7 @@ private:
     LPDIRECTDRAWSURFACE4 _backSurf;
     Bitmap _background;
     Bitmap _tiles1;
+    Bitmap _tiles2;
     LPDIRECTDRAWPALETTE _palette;
     Bitmap _framebuffer;
     bool _running;
@@ -56,6 +57,7 @@ private:
     double _currentTime;
     float _tileX;
     float _tileY;
+    float _birdFrame;
 
     static constexpr auto BASE_WIDTH = 320;
     static constexpr auto BASE_HEIGHT = 240;
@@ -67,6 +69,7 @@ private:
     void onPaint(WPARAM, LPARAM);
     void update(double dT);
     void render();
+    void renderGame(char* debugText, size_t debugTextSize, Bitmap* vfb);
     void onZoom(bool zoomIn);
     Bitmap loadBitmap(const char* name);
     void freeSurfaces();
@@ -87,7 +90,8 @@ App::App(HINSTANCE hInstance)
       _zoom(1),
       _tileX(0),
       _tileY(0),
-      _currentTime(0)
+      _currentTime(0),
+      _birdFrame(0)
 {
     InitializeCriticalSection(&_criticalSection);
     _framebuffer.w = BASE_WIDTH;
@@ -502,13 +506,133 @@ static void blit8to8(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, co
 static void blit8to16(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
                       const PALETTEENTRY* palette)
 {
-    panic("Not implemented yet");
+    if (!dstPtr || !srcPtr)
+    {
+        return;
+    }
+    if (dstWidth <= 0 || dstHeight <= 0 || srcWidth <= 0 || srcHeight <= 0)
+    {
+        return;
+    }
+
+    auto dst = static_cast<uint8_t*>(dstPtr);
+    auto src = static_cast<const uint8_t*>(srcPtr);
+
+    // Fast path: identical size
+    if (dstWidth == srcWidth && dstHeight == srcHeight)
+    {
+        for (int y = 0; y < dstHeight; y++)
+        {
+            uint16_t* scanline = reinterpret_cast<uint16_t*>(dst);
+            for (int x = 0; x < dstWidth; x++)
+            {
+                auto color = palette[*src++];
+                *scanline++ = (color.peBlue >> 3) | ((color.peGreen >> 2) << 5) | ((color.peRed >> 3) << 11);
+            }
+            dst += dstPitch;
+        }
+        return;
+    }
+
+    const Fixed16 xRatio = dstWidth > 1 ? Fixed16(srcWidth) / Fixed16(dstWidth) : 0;
+    const Fixed16 yRatio = dstHeight > 1 ? Fixed16(srcHeight) / Fixed16(dstHeight) : 0;
+    int srcY = 0;
+    for (int dy = 0; dy < dstHeight; ++dy)
+    {
+        const uint8_t* srcRow = src + srcY * srcPitch;
+        uint16_t* dstRow = reinterpret_cast<uint16_t*>(dst + dy * dstPitch);
+
+        Fixed16 sxAcc(0);
+        for (int dx = 0; dx < dstWidth; ++dx)
+        {
+            int srcX = sxAcc.toInt();
+            if (srcX >= srcWidth)
+            {
+                srcX = srcWidth - 1;
+            }
+
+            auto c = palette[srcRow[srcX]];
+            dstRow[dx] = (c.peBlue >> 3) | ((c.peGreen >> 2) << 5) | ((c.peRed >> 3) << 11);
+            sxAcc += xRatio;
+        }
+
+        if (dstHeight != 1)
+        {
+            srcY = (Fixed16(dy) * xRatio).toInt();
+        }
+        if (srcY >= srcHeight)
+        {
+            srcY = srcHeight - 1;
+        }
+    }
 }
 
 static void blit8to24(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
                       const PALETTEENTRY* palette)
 {
-    panic("Not implemented yet");
+    if (!dstPtr || !srcPtr)
+    {
+        return;
+    }
+    if (dstWidth <= 0 || dstHeight <= 0 || srcWidth <= 0 || srcHeight <= 0)
+    {
+        return;
+    }
+
+    auto dst = static_cast<uint8_t*>(dstPtr);
+    auto src = static_cast<const uint8_t*>(srcPtr);
+
+    // Fast path: identical size
+    if (dstWidth == srcWidth && dstHeight == srcHeight)
+    {
+        for (int y = 0; y < dstHeight; y++)
+        {
+            uint8_t* scanline = dst;
+            for (int x = 0; x < dstWidth; x++)
+            {
+                auto color = palette[*src++];
+                *scanline++ = color.peBlue;
+                *scanline++ = color.peGreen;
+                *scanline++ = color.peRed;
+            }
+            dst += dstPitch;
+        }
+        return;
+    }
+
+    const Fixed16 xRatio = dstWidth > 1 ? Fixed16(srcWidth) / Fixed16(dstWidth) : 0;
+    const Fixed16 yRatio = dstHeight > 1 ? Fixed16(srcHeight) / Fixed16(dstHeight) : 0;
+    int srcY = 0;
+    for (int dy = 0; dy < dstHeight; ++dy)
+    {
+        const uint8_t* srcRow = src + srcY * srcPitch;
+        uint8_t* dstRow = reinterpret_cast<uint8_t*>(dst + dy * dstPitch);
+
+        Fixed16 sxAcc(0);
+        for (int dx = 0; dx < dstWidth; ++dx)
+        {
+            int srcX = sxAcc.toInt();
+            if (srcX >= srcWidth)
+            {
+                srcX = srcWidth - 1;
+            }
+
+            auto c = palette[srcRow[srcX]];
+            dstRow[dx * 3] = c.peBlue;
+            dstRow[(dx * 3) + 1] = c.peGreen;
+            dstRow[(dx * 3) + 2] = c.peRed;
+            sxAcc += xRatio;
+        }
+
+        if (dstHeight != 1)
+        {
+            srcY = (Fixed16(dy) * xRatio).toInt();
+        }
+        if (srcY >= srcHeight)
+        {
+            srcY = srcHeight - 1;
+        }
+    }
 }
 
 void blit8to32(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
@@ -580,6 +704,12 @@ void App::update(double dT)
     _currentTime += dT;
     _tileX = 100 + (sin(_currentTime) * 100);
     _tileY = 100 + (cos(_currentTime) * 100);
+
+    _birdFrame += dT;
+    while (_birdFrame > 4.0f)
+    {
+        _birdFrame -= 4.0f;
+    }
 }
 
 void App::render()
@@ -638,13 +768,7 @@ void App::render()
 
     /* Render to framebuffer */
     assert(_framebuffer.ptr.size() == _background.ptr.size());
-    fastBlit(_framebuffer.ptr.data(), 0, 0, _framebuffer.w, _framebuffer.h, _framebuffer.w, _framebuffer.h, _background.ptr.data(), 0, 0, _background.w,
-             _background.h);
-    fastBlit(_framebuffer.ptr.data(), roundf(_tileX), roundf(_tileY), _tiles1.w, _tiles1.h, _framebuffer.w, _framebuffer.h,
-             _tiles1.ptr.data(), 0, 0, _tiles1.w, _tiles1.h,
-             195);
-
-    // memcpy(_framebuffer.ptr.data(), _background.ptr.data(), _background.w * _background.h);
+    renderGame(debugText, sizeof(debugText), &_framebuffer);
 
     /* Stretch and render framebuffer to backsurface */
     backsurfSize = getSurfaceSize(_backSurf);
@@ -677,7 +801,8 @@ void App::render()
     CHECK(_backSurf->Unlock(nullptr));
 
     /* Debug text */
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d w=%d h=%d zoom=%d tilex=%0.2f tiley=%0.2f", _fps, backsurfSize.width, backsurfSize.height, _zoom, _tileX, _tileY);
+    stbsp_snprintf(debugText + strlen(debugText), sizeof(debugText) - strlen(debugText), "fps=%d w=%d h=%d zoom=%d tilex=%0.2f tiley=%0.2f", _fps,
+                   backsurfSize.width, backsurfSize.height, _zoom, _tileX, _tileY);
 
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
@@ -707,6 +832,42 @@ void App::render()
     }
 
     LeaveCriticalSection(&_criticalSection);
+}
+
+struct Frame
+{
+    int x, y;
+};
+
+struct Sprite
+{
+    Bitmap* bmp;
+    std::vector<Frame> frames;
+    int w, h;
+};
+
+void App::renderGame(char* debugText, size_t debugTextSize, Bitmap* vfb)
+{
+    Sprite bird;
+    bird.bmp = &_tiles2;
+    bird.w = 16;
+    bird.h = 16;
+    bird.frames.emplace_back(Frame {0, 0});
+    bird.frames.emplace_back(Frame {16, 0});
+    bird.frames.emplace_back(Frame {32, 0});
+    bird.frames.emplace_back(Frame {48, 0});
+
+    memset(vfb->ptr.data(), 32, vfb->w * vfb->h);
+
+    int frame = _birdFrame;
+    stbsp_snprintf(debugText, debugTextSize, "frame=%d ", frame);
+
+    fastBlit(vfb->ptr.data(),
+             (320 - 16) / 2, (240 - 16) / 2, 16, 16, vfb->w, vfb->h,
+             bird.bmp->ptr.data(), 0, 0, 16, 16,
+             195);
+
+    fastBlit(vfb->ptr.data(), roundf(_tileX), roundf(_tileY), _tiles1.w, _tiles1.h, vfb->w, vfb->h, _tiles1.ptr.data(), 0, 0, _tiles1.w, _tiles1.h, 195);
 }
 
 Bitmap App::loadBitmap(const char* name)
@@ -760,8 +921,11 @@ void App::createSurfaces()
     {
         SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED);
 
-        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_FULLSCREEN | DDSCL_EXCLUSIVE | DDSCL_ALLOWREBOOT));
-        CHECK(_ddraw->SetDisplayMode(BASE_WIDTH * 2, BASE_HEIGHT * 2, 8, 0, 0));
+        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_FULLSCREEN | DDSCL_EXCLUSIVE | DDSCL_ALLOWREBOOT | DDSCL_ALLOWMODEX));
+        if (auto ret = _ddraw->SetDisplayMode(BASE_WIDTH * _zoom, BASE_HEIGHT * _zoom, 8, 0, 0); FAILED(ret))
+        {
+            trace("SetDisplayMode failed: 0x%X %s", ret, hresult2str(ret));
+        }
 
         /* Create primary surface */
         DDSURFACEDESC2 ddsd;
@@ -847,6 +1011,8 @@ void App::createSurfaces()
     _background = loadBitmap("swatch.dat");
     trace("Loading tiles1.dat");
     _tiles1 = loadBitmap("tiles1.dat");
+    trace("Loading tiles2.dat");
+    _tiles2 = loadBitmap("tiles2.dat");
 
     trace("Done creating surfaces");
 }
