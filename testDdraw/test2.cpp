@@ -1,3 +1,4 @@
+#include "fixed16.hpp"
 #include "util.hpp"
 
 #include <algorithm>
@@ -59,7 +60,7 @@ private:
     static constexpr auto BASE_HEIGHT = 240;
 
     static constexpr auto FULLSCREEN_STYLE = WS_POPUP;
-    static constexpr auto WINDOWED_STYLE = WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX;
+    static constexpr auto WINDOWED_STYLE = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     void onPaint(WPARAM, LPARAM);
@@ -75,15 +76,7 @@ void __blit(const char* file, int line, LPDIRECTDRAWSURFACE4 dstSurf, LPRECT dst
 #define blit(dstSurf, dstRect, srcSurf, srcRect, flags, fx) __blit(__FILE__, __LINE__, dstSurf, dstRect, srcSurf, srcRect, flags, fx)
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance),
-      _ddraw(nullptr),
-      _primarySurf(nullptr),
-      _backSurf(nullptr),
-      _palette(nullptr),
-      _running(false), 
-      _b(0.0f), 
-      _fullscreen(false),
-      _zoom(1)
+    : IApp(hInstance), _ddraw(nullptr), _primarySurf(nullptr), _backSurf(nullptr), _palette(nullptr), _running(false), _b(0.0f), _fullscreen(false), _zoom(1)
 {
     InitializeCriticalSection(&_criticalSection);
     _framebuffer.w = BASE_WIDTH;
@@ -118,11 +111,8 @@ bool App::init()
     rcWindow.bottom = BASE_HEIGHT * _zoom;
     AdjustWindowRect(&rcWindow, windowStyle, FALSE);
 
-    HWND hwnd = CreateWindowEx(0, 
-            "MainWin", "Flappy", windowStyle, 
-            0, 0, 
-            rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, 
-            nullptr, nullptr, _hinstance, this);
+    HWND hwnd = CreateWindowEx(0, "MainWin", "Flappy", windowStyle, 0, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, nullptr, nullptr,
+                               _hinstance, this);
     if (!hwnd)
     {
         return false;
@@ -144,9 +134,9 @@ bool App::init()
         _paletteEntries[i].peRed = i;
         _paletteEntries[i].peGreen = _paletteEntries[i].peBlue = 0;
 
-        _paletteEntries[i+246].peFlags = PC_EXPLICIT;
-        _paletteEntries[i+246].peRed = i+246;
-        _paletteEntries[i+246].peGreen = _paletteEntries[i+246].peBlue = 0;
+        _paletteEntries[i + 246].peFlags = PC_EXPLICIT;
+        _paletteEntries[i + 246].peRed = i + 246;
+        _paletteEntries[i + 246].peGreen = _paletteEntries[i + 246].peBlue = 0;
     }
 
     createSurfaces();
@@ -297,50 +287,149 @@ void App::onZoom(bool zoomIn)
     rc.top = 0;
     rc.bottom = BASE_HEIGHT * _zoom;
     AdjustWindowRect(&rc, WINDOWED_STYLE, FALSE);
-    SetWindowPos(_hwnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE|SWP_NOZORDER);
+    SetWindowPos(_hwnd, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE | SWP_NOZORDER);
     createSurfaces();
 }
 
-static void blit8to8(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
-                     const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+static void blit8to8(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
                      const PALETTEENTRY* palette)
 {
-    panic("Not implemented yet");
-}
-
-static void blit8to16(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
-                      const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
-                      const PALETTEENTRY* palette)
-{
-    panic("Not implemented yet");
-}
-
-static void blit8to24(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
-                      const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
-                      const PALETTEENTRY* palette)
-{
-    panic("Not implemented yet");
-}
-
-static void blit8to32(void* dstPtr, int dstWidth, int dstHeight, int dstPitch,
-                      const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
-                      const PALETTEENTRY* palette)
-{
-    if (dstWidth > srcWidth || dstHeight > srcHeight)
+    if (!dstPtr || !srcPtr)
     {
-        panic("TODO: Stretch");
+        return;
     }
-    
-    auto src = (const uint8_t*)srcPtr;
-    for (int y = 0; y < dstHeight; y++)
+    if (dstWidth <= 0 || dstHeight <= 0 || srcWidth <= 0 || srcHeight <= 0)
     {
-        uint32_t* scanline = (uint32_t*)dstPtr;
-        for (int x = 0; x < dstWidth; x++)
+        return;
+    }
+
+    auto dst = static_cast<uint8_t*>(dstPtr);
+    auto src = static_cast<const uint8_t*>(srcPtr);
+
+    // Fast path: identical size
+    if (dstWidth == srcWidth && dstHeight == srcHeight)
+    {
+        if (dstPitch == srcPitch)
         {
-            auto color = palette[*src++];
-            *scanline++ = color.peBlue | (color.peGreen << 8) | (color.peRed << 16);
+            memcpy(dst, src, dstHeight * dstPitch);
         }
-        dstPtr = (uint8_t*)dstPtr + dstPitch;
+        else
+        {
+            for (int y = 0; y < dstHeight; y++)
+            {
+                memcpy(dst, src, dstWidth);
+                dst += dstPitch;
+                src += srcPitch;
+            }
+        }
+        return;
+    }
+
+    const Fixed16 xRatio = dstWidth > 1 ? Fixed16(srcWidth) / Fixed16(dstWidth) : 0;
+    const Fixed16 yRatio = dstHeight > 1 ? Fixed16(srcHeight) / Fixed16(dstHeight) : 0;
+    int srcY = 0;
+    for (int dy = 0; dy < dstHeight; ++dy)
+    {
+        const uint8_t* srcRow = src + srcY * srcPitch;
+        uint8_t* dstRow = dst + dy * dstPitch;
+
+        Fixed16 sxAcc(0);
+        for (int dx = 0; dx < dstWidth; ++dx)
+        {
+            int srcX = sxAcc.toInt();
+            if (srcX >= srcWidth)
+            {
+                srcX = srcWidth - 1;
+            }
+
+            dstRow[dx] = srcRow[srcX];
+            sxAcc += xRatio;
+        }
+
+        if (dstHeight != 1)
+        {
+            srcY = (Fixed16(dy) * xRatio).toInt();
+        }
+        if (srcY >= srcHeight)
+        {
+            srcY = srcHeight - 1;
+        }
+    }
+}
+
+static void blit8to16(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+                      const PALETTEENTRY* palette)
+{
+    panic("Not implemented yet");
+}
+
+static void blit8to24(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+                      const PALETTEENTRY* palette)
+{
+    panic("Not implemented yet");
+}
+
+void blit8to32(void* dstPtr, int dstWidth, int dstHeight, int dstPitch, const void* srcPtr, int srcWidth, int srcHeight, int srcPitch,
+               const PALETTEENTRY* palette)
+{
+    if (!dstPtr || !srcPtr)
+    {
+        return;
+    }
+    if (dstWidth <= 0 || dstHeight <= 0 || srcWidth <= 0 || srcHeight <= 0)
+    {
+        return;
+    }
+
+    auto dst = static_cast<uint8_t*>(dstPtr);
+    auto src = static_cast<const uint8_t*>(srcPtr);
+
+    // Fast path: identical size
+    if (dstWidth == srcWidth && dstHeight == srcHeight)
+    {
+        for (int y = 0; y < dstHeight; y++)
+        {
+            uint32_t* scanline = reinterpret_cast<uint32_t*>(dst);
+            for (int x = 0; x < dstWidth; x++)
+            {
+                auto color = palette[*src++];
+                *scanline++ = color.peBlue | (color.peGreen << 8) | (color.peRed << 16);
+            }
+            dst += dstPitch;
+        }
+        return;
+    }
+
+    const Fixed16 xRatio = dstWidth > 1 ? Fixed16(srcWidth) / Fixed16(dstWidth) : 0;
+    const Fixed16 yRatio = dstHeight > 1 ? Fixed16(srcHeight) / Fixed16(dstHeight) : 0;
+    int srcY = 0;
+    for (int dy = 0; dy < dstHeight; ++dy)
+    {
+        const uint8_t* srcRow = src + srcY * srcPitch;
+        uint32_t* dstRow = reinterpret_cast<uint32_t*>(dst + dy * dstPitch);
+
+        Fixed16 sxAcc(0);
+        for (int dx = 0; dx < dstWidth; ++dx)
+        {
+            int srcX = sxAcc.toInt();
+            if (srcX >= srcWidth)
+            {
+                srcX = srcWidth - 1;
+            }
+
+            auto c = palette[srcRow[srcX]];
+            dstRow[dx] = c.peBlue | (c.peGreen << 8) | (c.peRed << 16);
+            sxAcc += xRatio;
+        }
+
+        if (dstHeight != 1)
+        {
+            srcY = (Fixed16(dy) * xRatio).toInt();
+        }
+        if (srcY >= srcHeight)
+        {
+            srcY = srcHeight - 1;
+        }
     }
 }
 
@@ -417,39 +506,27 @@ void App::render()
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    CHECK(_backSurf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT, nullptr));
+    CHECK(_backSurf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR | DDLOCK_WAIT, nullptr));
     switch (ddsd.ddpfPixelFormat.dwRGBBitCount)
     {
-        case 8:
-            blit8to8(ddsd.lpSurface,
-                     ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
-                     _framebuffer.ptr.data(),
-                     _framebuffer.w, _framebuffer.h, _framebuffer.w,
-                     _paletteEntries.data());
-            break;
-        case 16:
-            blit8to16(ddsd.lpSurface,
-                      ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
-                      _framebuffer.ptr.data(),
-                      _framebuffer.w, _framebuffer.h, _framebuffer.w,
-                      _paletteEntries.data());
-            break;
-        case 24:
-            blit8to24(ddsd.lpSurface,
-                      ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
-                      _framebuffer.ptr.data(),
-                      _framebuffer.w, _framebuffer.h, _framebuffer.w,
-                      _paletteEntries.data());
-            break;
-        case 32:
-            blit8to32(ddsd.lpSurface,
-                      ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch,
-                      _framebuffer.ptr.data(),
-                      _framebuffer.w, _framebuffer.h, _framebuffer.w,
-                      _paletteEntries.data());
-            break;
-        default:
-            panic("Unsupported pixel format");
+    case 8:
+        blit8to8(ddsd.lpSurface, ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch, _framebuffer.ptr.data(), _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                 _paletteEntries.data());
+        break;
+    case 16:
+        blit8to16(ddsd.lpSurface, ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch, _framebuffer.ptr.data(), _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                  _paletteEntries.data());
+        break;
+    case 24:
+        blit8to24(ddsd.lpSurface, ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch, _framebuffer.ptr.data(), _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                  _paletteEntries.data());
+        break;
+    case 32:
+        blit8to32(ddsd.lpSurface, ddsd.dwWidth, ddsd.dwHeight, ddsd.lPitch, _framebuffer.ptr.data(), _framebuffer.w, _framebuffer.h, _framebuffer.w,
+                  _paletteEntries.data());
+        break;
+    default:
+        panic("Unsupported pixel format");
     }
     CHECK(_backSurf->Unlock(nullptr));
 
@@ -535,25 +612,25 @@ void App::createSurfaces()
 
     if (_fullscreen)
     {
-        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOSIZE|SWP_NOMOVE|SWP_FRAMECHANGED);
+        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED);
 
-        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_FULLSCREEN|DDSCL_EXCLUSIVE|DDSCL_ALLOWREBOOT));
-        CHECK(_ddraw->SetDisplayMode(BASE_WIDTH*2, BASE_HEIGHT*2, 8, 0, 0));
+        CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_FULLSCREEN | DDSCL_EXCLUSIVE | DDSCL_ALLOWREBOOT));
+        CHECK(_ddraw->SetDisplayMode(BASE_WIDTH * 2, BASE_HEIGHT * 2, 8, 0, 0));
 
         /* Create primary surface */
         DDSURFACEDESC2 ddsd;
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
-        ddsd.dwFlags = DDSD_CAPS|DDSD_BACKBUFFERCOUNT;
+        ddsd.dwFlags = DDSD_CAPS | DDSD_BACKBUFFERCOUNT;
         ddsd.dwBackBufferCount = 1;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE|DDSCAPS_COMPLEX|DDSCAPS_FLIP;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE | DDSCAPS_COMPLEX | DDSCAPS_FLIP;
         CHECK(_ddraw->CreateSurface(&ddsd, &_primarySurf, nullptr));
     }
     else
     {
         CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_NORMAL));
 
-        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOSIZE|SWP_NOMOVE|SWP_FRAMECHANGED);
+        SetWindowPos(_hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED);
 
         RECT rcWindow;
         rcWindow.left = 0;
@@ -561,11 +638,7 @@ void App::createSurfaces()
         rcWindow.right = BASE_WIDTH * _zoom;
         rcWindow.bottom = BASE_HEIGHT * _zoom;
         AdjustWindowRect(&rcWindow, windowStyle, FALSE);
-        SetWindowPos(_hwnd, nullptr, 0, 0,
-                rcWindow.right - rcWindow.left, 
-                rcWindow.bottom - rcWindow.top,
-                SWP_NOZORDER|SWP_NOMOVE);
-
+        SetWindowPos(_hwnd, nullptr, 0, 0, rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top, SWP_NOZORDER | SWP_NOMOVE);
 
         /* Create primary surface */
         DDSURFACEDESC2 ddsd;
