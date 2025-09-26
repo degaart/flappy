@@ -15,14 +15,19 @@
 #include "../stb_image.h"
 
 /*
- * We have 4 categories of surfaces:
- *  - primarySurface: surface which is displayed on screen
- *  - backbuffer: surface with the same geometry as primary surface, where the worksurface will be rendered
- *  - worksurface: surface where we render. Fixed geometry of 320x240x8
- *  - offscreen surface: surface to be blitted to worksurface
- *
- *  As a special case for optimization: if backbuffer has geometry 320x240x8, we skip worksurface and render
- *  directly into it
+ * - The backbuffer is always 320x240 (BASE_WIDTH and BASE_HEIGHT)
+ * - We always use Blt or FastBlt
+ * - In fullscreen:
+ *   - We switch to 320x240x8 modeX
+ *   - We blit directly to backbuffer
+ *   - We flip primary surface
+ * - Windowed mode:
+ *   - Create scaled mainsurface depending on zoom factor
+ *   - Create backbuffer which is always 320x240
+ *   - We blit to backbuffer
+ *   - We blit backbuffer to mainsurface, hoping hardware supports
+ *      scaling. Else we add logic to manually scale it using
+ *      StretchBlt (yes, it will be slow)
  */
 
 struct Bitmap
