@@ -74,7 +74,7 @@ static void __panic(const char* file, int line, const char* format, ...)
     printf("%s\n", buffer);
     fflush(stdout);
 
-    //MessageBox(nullptr, buffer, "Panic", MB_OK | MB_ICONERROR);
+    // MessageBox(nullptr, buffer, "Panic", MB_OK | MB_ICONERROR);
     ExitProcess(1);
     abort();
     exit(1);
@@ -228,6 +228,17 @@ inline const char* hresult2str(HRESULT hResult)
         }                                                                                                                                                      \
     } while (false)
 
+#define REPORT(fn)                                                                                                                                             \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        if (auto ret = fn; FAILED(ret))                                                                                                                        \
+        {                                                                                                                                                      \
+            char buffer[512];                                                                                                                                  \
+            stbsp_snprintf(buffer, sizeof(buffer), "%s failed: 0x%lX %s", #fn, ret, hresult2str(ret));                                                         \
+            __trace(__FILE__, __LINE__, "%s", buffer);                                                                                                         \
+        }                                                                                                                                                      \
+    } while (false)
+
 #define RETRY(fn)                                                                                                                                              \
     do                                                                                                                                                         \
     {                                                                                                                                                          \
@@ -269,7 +280,7 @@ inline Size<int> getSurfaceSize(LPDIRECTDRAWSURFACE4 surf)
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_WIDTH|DDSD_HEIGHT;
+    ddsd.dwFlags = DDSD_WIDTH | DDSD_HEIGHT;
     CHECK(surf->GetSurfaceDesc(&ddsd));
     return {(int)ddsd.dwWidth, (int)ddsd.dwHeight};
 }
@@ -315,7 +326,6 @@ inline std::optional<int> parseInt(std::string_view str, int base)
     }
     return *ret;
 }
-
 
 inline std::vector<PALETTEENTRY> loadPalette(const char* filename)
 {
@@ -402,11 +412,11 @@ inline std::vector<PALETTEENTRY> loadPalette(const char* filename)
 }
 
 #ifndef MIN
-#   define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#    define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #ifndef MAX
-#   define MAX(a, b) (((a) < (b)) ? (a) : (b))
+#    define MAX(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #ifndef UTIL_NOAPP
@@ -425,20 +435,20 @@ public:
 
     static void* getWindowLong(HWND hwnd)
     {
-#ifdef _WIN64
+#    ifdef _WIN64
         return reinterpret_cast<void*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-#else
+#    else
         return reinterpret_cast<void*>(GetWindowLong(hwnd, GWL_USERDATA));
-#endif
+#    endif
     }
 
     static void setWindowLong(HWND hwnd, void* data)
     {
-#ifdef _WIN64
+#    ifdef _WIN64
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)data);
-#else
+#    else
         SetWindowLong(hwnd, GWL_USERDATA, (LONG)data);
-#endif
+#    endif
     }
 
     static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -505,5 +515,4 @@ INT APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, INT)
     return ret;
 }
 #endif
-
 

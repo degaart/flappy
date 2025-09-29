@@ -1,6 +1,7 @@
 #include "util.hpp"
 
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 
 struct Bitmap
@@ -23,6 +24,7 @@ public:
     bool init() override;
     int run() override;
     void cleanup() override;
+
 private:
     LPDIRECTDRAW4 _ddraw;
     LPDIRECTDRAWSURFACE4 _primarySurf;
@@ -33,6 +35,8 @@ private:
     bool _active;
     Bitmap _tiles1;
 
+    int _fps;
+
     static constexpr auto GAME_WIDTH = 320;
     static constexpr auto GAME_HEIGHT = 240;
     static constexpr auto WINDOWSTYLE = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -41,6 +45,7 @@ private:
     void freeSurfaces();
     std::optional<LRESULT> onEvent(HWND, UINT, WPARAM, LPARAM) override;
     Bitmap loadBitmap(const char* filename);
+    void update(double dT);
     void render();
     static int getBPP(DDPIXELFORMAT* pf);
     static uint32_t makeRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
@@ -48,13 +53,7 @@ private:
 };
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance),
-      _ddraw(nullptr),
-      _primarySurf(nullptr),
-      _backSurf(nullptr),
-      _fullscreen(false),
-      _zoom(1),
-      _active(false)
+    : IApp(hInstance), _ddraw(nullptr), _primarySurf(nullptr), _backSurf(nullptr), _fullscreen(false), _zoom(2), _active(false)
 {
 }
 
@@ -118,6 +117,10 @@ bool App::init()
 
 int App::run()
 {
+    double prevTime = 0.0;
+    double lag = 0;
+    double frameTimer = 0.0f;
+    int frames = 0;
     while (true)
     {
         MSG msg;
@@ -133,7 +136,32 @@ int App::run()
 
         if (_active)
         {
+            auto beginTime = getCurrentTime();
+            auto elapsed = beginTime - prevTime;
+            lag += elapsed;
+            if (lag > 1.0)
+            {
+                lag = 1.0;
+            }
+
+            auto dT = 1.0 / 60.0;
+            while (lag > dT)
+            {
+                update(dT);
+                lag -= dT;
+            }
+
+            frames++;
+            frameTimer += elapsed;
+            if (frameTimer >= 1.0)
+            {
+                _fps = round(frames / frameTimer);
+                frameTimer = 0;
+                frames = 0;
+            }
+
             render();
+            prevTime = beginTime;
         }
     }
 
@@ -152,6 +180,7 @@ void App::cleanup()
 
 void App::createSurfaces()
 {
+
     freeSurfaces();
     if (_fullscreen)
     {
@@ -168,7 +197,19 @@ void App::createSurfaces()
     }
     else
     {
+        CHECK(_ddraw->RestoreDisplayMode());
         CHECK(_ddraw->SetCooperativeLevel(_hwnd, DDSCL_NORMAL));
+
+        RECT windowRect;
+        windowRect.left = windowRect.top = 0;
+        windowRect.right = GAME_WIDTH * _zoom;
+        windowRect.bottom = GAME_HEIGHT * _zoom;
+        AdjustWindowRect(&windowRect, WINDOWSTYLE, FALSE);
+        SetWindowPos(_hwnd, NULL, 0, 0, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOREDRAW);
+
+        PostMessage(HWND_BROADCAST, WM_PAINT, 0, 0);
+        InvalidateRect(NULL, NULL, TRUE);
+        UpdateWindow(GetDesktopWindow());
 
         RECT rcWindow;
         GetClientRect(_hwnd, &rcWindow);
@@ -185,16 +226,12 @@ void App::createSurfaces()
     memset(&pf, 0, sizeof(pf));
     pf.dwSize = sizeof(pf);
     CHECK(_primarySurf->GetPixelFormat(&pf));
-    if (pf.dwFlags & DDPF_PALETTEINDEXED8)
+    if (getBPP(&pf) == 8)
     {
         LPDIRECTDRAWPALETTE palette;
         CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries.data(), &palette, nullptr));
         CHECK(_primarySurf->SetPalette(palette));
         palette->Release();
-    }
-    else if ((pf.dwFlags & DDPF_RGB) == 0)
-    {
-        panic("Unsupported pixel format");
     }
 
     if (_fullscreen)
@@ -206,9 +243,6 @@ void App::createSurfaces()
     }
     else
     {
-        //RECT cltRect;
-        //GetClientRect(_hwnd, &cltRect);
-
         DDSURFACEDESC2 ddsd;
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
@@ -226,6 +260,12 @@ void App::createSurfaces()
     }
 
     _tiles1 = loadBitmap("tiles1.dat");
+
+    DDSURFACEDESC2 ddsd;
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    CHECK(_backSurf->GetSurfaceDesc(&ddsd));
+    trace("Backsurf size: %dx%d", ddsd.dwWidth, ddsd.dwHeight);
 }
 
 void App::freeSurfaces()
@@ -260,6 +300,19 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     case WM_ACTIVATE:
         _active = (LOWORD(wparam) != 0);
         return 0;
+    case WM_KEYUP:
+        switch (wparam)
+        {
+        case VK_F5:
+            _fullscreen = !_fullscreen;
+            if (!_fullscreen)
+            {
+                CHECK(_ddraw->RestoreDisplayMode());
+            }
+            createSurfaces();
+            break;
+        }
+        break;
     }
     return std::nullopt;
 }
@@ -319,7 +372,7 @@ Bitmap App::loadBitmap(const char* filename)
 
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
-    CHECK(result.surf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT, nullptr));
+    CHECK(result.surf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR | DDLOCK_WAIT, nullptr));
 
     switch (getBPP(&pf))
     {
@@ -353,8 +406,14 @@ Bitmap App::loadBitmap(const char* filename)
     return result;
 }
 
+void App::update(double dT)
+{
+}
+
 void App::render()
 {
+    char debugText[255] = "";
+
     if (_backSurf->IsLost())
     {
         CHECK(_backSurf->Restore());
@@ -364,23 +423,25 @@ void App::render()
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
     CHECK(_backSurf->GetSurfaceDesc(&ddsd));
+    int backsurfWidth = ddsd.dwWidth;
+    int backsurfHeight = ddsd.dwHeight;
 
     DDBLTFX fx;
     memset(&fx, 0, sizeof(fx));
     fx.dwSize = sizeof(fx);
     switch (getBPP(&ddsd.ddpfPixelFormat))
     {
-        case 8:
-            fx.dwFillColor = 111;
-            break;
-        case 32:
-            fx.dwFillColor = makeRGB(102, 204, 255);
-            break;
-        default:
-            panic("Unsupported pixel format");
+    case 8:
+        fx.dwFillColor = 111;
+        break;
+    case 32:
+        fx.dwFillColor = makeRGB(102, 204, 255);
+        break;
+    default:
+        panic("Unsupported pixel format");
     }
-    
-    CHECK(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL, &fx));
+
+    CHECK(_backSurf->Blt(nullptr, nullptr, nullptr, DDBLT_COLORFILL | DDBLT_WAIT, &fx));
 
     if (_tiles1.surf->IsLost())
     {
@@ -405,9 +466,16 @@ void App::render()
         _primarySurf->Restore();
     }
 
+    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
+    HDC hdc;
+    CHECK(_backSurf->GetDC(&hdc));
+    SetTextColor(hdc, RGB(255, 0, 0));
+    TextOut(hdc, 0, 0, debugText, lstrlen(debugText));
+    _backSurf->ReleaseDC(hdc);
+
     if (_fullscreen)
     {
-        CHECK(_primarySurf->Flip(nullptr, DDFLIP_WAIT));
+        REPORT(_primarySurf->Flip(nullptr, DDFLIP_WAIT));
     }
     else
     {
@@ -418,7 +486,12 @@ void App::render()
 
         GetClientRect(_hwnd, &dstRect);
         OffsetRect(&dstRect, origin.x, origin.y);
-        CHECK(_primarySurf->Blt(&dstRect, _backSurf, &srcRect, DDBLT_WAIT, nullptr));
+
+        srcRect.left = 0;
+        srcRect.top = 0;
+        srcRect.right = backsurfWidth;
+        srcRect.bottom = backsurfHeight;
+        REPORT(_primarySurf->Blt(&dstRect, _backSurf, &srcRect, DDBLT_WAIT, nullptr));
     }
 }
 
