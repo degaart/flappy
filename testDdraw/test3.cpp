@@ -431,7 +431,19 @@ Bitmap App::loadBitmap(const char* filename)
             uint32_t* dstPtr = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(ddsd.lpSurface) + (y * ddsd.lPitch));
             for (int x = 0; x < width; x++)
             {
-                auto c = _paletteEntries[*srcPtr];
+                PALETTEENTRY c;
+                switch (*srcPtr)
+                {
+                case 0:
+                    c.peRed = c.peGreen = c.peBlue = 0;
+                    break;
+                case 255:
+                    c.peRed = c.peGreen = c.peBlue = 255;
+                    break;
+                default:
+                    c = _paletteEntries[*srcPtr];
+                    break;
+                }
                 *dstPtr = makeRGB(c.peRed, c.peGreen, c.peBlue, &pf);
                 srcPtr++;
                 dstPtr++;

@@ -223,21 +223,34 @@ int main(int argc, char** argv)
             uint8_t g = *scanline++;
             uint8_t b = *scanline++;
 
-            uint8_t closest = 0;
-            int minDist = INT_MAX;
-            for (int col = 0; col < palette->size(); col++)
+            if (r == 0 && g == 0 && b == 0)
             {
-                int rDist = r - (*palette)[col].r;
-                int gDist = g - (*palette)[col].g;
-                int bDist = b - (*palette)[col].b;
-                int dist = rDist*rDist + gDist*gDist + bDist*bDist;
-                if (dist < minDist)
-                {
-                    minDist = dist;
-                    closest = col;
-                }
+                uint8_t value = 0;
+                emit(&value, sizeof(value));
             }
-            emit(&closest, sizeof(closest));
+            else if (r == 255 && g == 255 && b == 255)
+            {
+                uint8_t value = 255;
+                emit(&value, sizeof(value));
+            }
+            else
+            {
+                uint8_t closest = 0;
+                int minDist = INT_MAX;
+                for (int col = 10; col < 256-10; col++)
+                {
+                    int rDist = r - (*palette)[col].r;
+                    int gDist = g - (*palette)[col].g;
+                    int bDist = b - (*palette)[col].b;
+                    int dist = rDist*rDist + gDist*gDist + bDist*bDist;
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        closest = col;
+                    }
+                }
+                emit(&closest, sizeof(closest));
+            }
         }
         srcPtr += width * 3;
     }
