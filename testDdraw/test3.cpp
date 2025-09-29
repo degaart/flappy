@@ -330,6 +330,25 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
             break;
         }
         break;
+    case WM_MOUSEWHEEL:
+        if (int zDelta = static_cast<short>(HIWORD(wparam)) / WHEEL_DELTA; zDelta > 0)
+        {
+            _zoom++;
+            if (_zoom >= 8)
+            {
+                _zoom = 8;
+            }
+        }
+        else
+        {
+            _zoom--;
+            if (_zoom < 1)
+            {
+                _zoom = 1;
+            }
+        }
+        createSurfaces();
+        break;
     }
     return std::nullopt;
 }
@@ -446,7 +465,9 @@ void App::render()
     DDBLTFX fx;
     memset(&fx, 0, sizeof(fx));
     fx.dwSize = sizeof(fx);
-    switch (getBPP(&ddsd.ddpfPixelFormat))
+
+    int bpp = getBPP(&ddsd.ddpfPixelFormat);
+    switch (bpp)
     {
     case 8:
         fx.dwFillColor = 111;
@@ -476,7 +497,23 @@ void App::render()
     dstRect.top = 0;
     dstRect.right = _tiles1.w;
     dstRect.bottom = _tiles1.h;
-    CHECK(_backSurf->Blt(&dstRect, _tiles1.surf, &srcRect, DDBLT_WAIT, nullptr));
+
+    //switch (bpp)
+    //{
+    //case 8:
+    //    fx.ddckSrcColorkey.;
+    //    break;
+    //case 32:
+    //    break;
+    //}
+
+    //CHECK(_backSurf->Blt(&dstRect, _tiles1.surf, &srcRect, DDBLT_WAIT, nullptr));
+
+    DDCOLORKEY cckey;
+    cckey.dwColorSpaceLowValue = 0;
+    cckey.dwColorSpaceHighValue = 0;
+    CHECK(_tiles1.surf->SetColorKey(DDCKEY_SRCBLT, &cckey));
+    CHECK(_backSurf->BltFast(0, 0, _tiles1.surf, &srcRect, DDBLTFAST_WAIT|DDBLTFAST_SRCCOLORKEY));
 
     if (_primarySurf->IsLost())
     {
