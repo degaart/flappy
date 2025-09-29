@@ -303,11 +303,28 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     case WM_KEYUP:
         switch (wparam)
         {
+        case VK_ESCAPE:
+            PostMessageA(_hwnd, WM_CLOSE, 0, 0);
+            break;
         case VK_F5:
             _fullscreen = !_fullscreen;
             if (!_fullscreen)
             {
                 CHECK(_ddraw->RestoreDisplayMode());
+            }
+            createSurfaces();
+            break;
+        case VK_F6:
+            if (_zoom > 1)
+            {
+                _zoom--;
+            }
+            createSurfaces();
+            break;
+        case VK_F7:
+            if (_zoom < 8)
+            {
+                _zoom++;
             }
             createSurfaces();
             break;
