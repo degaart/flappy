@@ -48,8 +48,7 @@ private:
     void update(double dT);
     void render();
     static int getBPP(DDPIXELFORMAT* pf);
-    static uint32_t makeRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-    static uint32_t makeRGB(uint8_t r, uint8_t g, uint8_t b);
+    static uint32_t makeRGB(uint8_t r, uint8_t g, uint8_t b, const DDPIXELFORMAT* ddpf);
 };
 
 App::App(HINSTANCE hInstance)
@@ -107,6 +106,9 @@ bool App::init()
         _paletteEntries[i + 246].peRed = i + 246;
         _paletteEntries[i + 246].peGreen = _paletteEntries[i + 246].peBlue = 0;
     }
+
+    trace("Palette entry 255: %d,%d,%d", _paletteEntries[255].peRed, _paletteEntries[255].peGreen, _paletteEntries[255].peBlue);
+
     createSurfaces();
     _active = true;
 
@@ -420,6 +422,8 @@ Bitmap App::loadBitmap(const char* filename)
             memcpy(dstPtr, srcPtr, width);
         }
         break;
+    case 16:
+    case 24:
     case 32:
         for (int y = 0; y < height; y++)
         {
@@ -428,7 +432,7 @@ Bitmap App::loadBitmap(const char* filename)
             for (int x = 0; x < width; x++)
             {
                 auto c = _paletteEntries[*srcPtr];
-                *dstPtr = makeRGB(c.peRed, c.peGreen, c.peBlue);
+                *dstPtr = makeRGB(c.peRed, c.peGreen, c.peBlue, &pf);
                 srcPtr++;
                 dstPtr++;
             }
@@ -473,7 +477,7 @@ void App::render()
         fx.dwFillColor = 111;
         break;
     case 32:
-        fx.dwFillColor = makeRGB(102, 204, 255);
+        fx.dwFillColor = makeRGB(102, 204, 255, &ddsd.ddpfPixelFormat);
         break;
     default:
         panic("Unsupported pixel format");
@@ -498,22 +502,25 @@ void App::render()
     dstRect.right = _tiles1.w;
     dstRect.bottom = _tiles1.h;
 
-    //switch (bpp)
-    //{
-    //case 8:
-    //    fx.ddckSrcColorkey.;
-    //    break;
-    //case 32:
-    //    break;
-    //}
-
-    //CHECK(_backSurf->Blt(&dstRect, _tiles1.surf, &srcRect, DDBLT_WAIT, nullptr));
-
     DDCOLORKEY cckey;
-    cckey.dwColorSpaceLowValue = 0;
-    cckey.dwColorSpaceHighValue = 0;
+    switch (bpp)
+    {
+    case 8:
+        cckey.dwColorSpaceLowValue = 195;
+        cckey.dwColorSpaceHighValue = 195;
+        break;
+    case 16:
+    case 24:
+    case 32:
+        cckey.dwColorSpaceLowValue = makeRGB(255, 0, 255, &ddsd.ddpfPixelFormat);
+        cckey.dwColorSpaceHighValue = cckey.dwColorSpaceLowValue;
+        break;
+    default:
+        panic("Unsupported pixel format");
+        break;
+    }
     CHECK(_tiles1.surf->SetColorKey(DDCKEY_SRCBLT, &cckey));
-    CHECK(_backSurf->BltFast(0, 0, _tiles1.surf, &srcRect, DDBLTFAST_WAIT|DDBLTFAST_SRCCOLORKEY));
+    CHECK(_backSurf->BltFast(0, 0, _tiles1.surf, &srcRect, DDBLTFAST_WAIT | DDBLTFAST_SRCCOLORKEY));
 
     if (_primarySurf->IsLost())
     {
@@ -566,14 +573,54 @@ int App::getBPP(DDPIXELFORMAT* pf)
     }
 }
 
-uint32_t App::makeRGB(uint8_t r, uint8_t g, uint8_t b)
+uint32_t App::makeRGB(uint8_t r, uint8_t g, uint8_t b, const DDPIXELFORMAT* ddpf)
 {
-    return makeRGBA(r, g, b, 0xFF);
-}
+    // Normalize to the mask size
+    auto redMask = ddpf->dwRBitMask;
+    auto greenMask = ddpf->dwGBitMask;
+    auto blueMask = ddpf->dwBBitMask;
 
-uint32_t App::makeRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-{
-    return b | (g << 8) | (r << 16) | (a << 24);
+    // Find bit shifts
+    int rShift = 0;
+    while (((redMask >> rShift) & 1) == 0 && rShift < 32)
+    {
+        rShift++;
+    }
+
+    int gShift = 0;
+    while (((greenMask >> gShift) & 1) == 0 && gShift < 32)
+    {
+        gShift++;
+    }
+
+    int bShift = 0;
+    while (((blueMask >> bShift) & 1) == 0 && bShift < 32)
+    {
+        bShift++;
+    }
+
+    // Scale 0–255 channel values down to mask size
+    int rBits = 0, gBits = 0, bBits = 0;
+    while ((1U << rBits) - 1 < (redMask >> rShift))
+    {
+        rBits++;
+    }
+
+    while ((1U << gBits) - 1 < (greenMask >> gShift))
+    {
+        gBits++;
+    }
+
+    while ((1U << bBits) - 1 < (blueMask >> bShift))
+    {
+        bBits++;
+    }
+
+    auto rVal = ((r * ((1 << rBits) - 1)) / 255) << rShift;
+    auto gVal = ((g * ((1 << gBits) - 1)) / 255) << gShift;
+    auto bVal = ((b * ((1 << bBits) - 1)) / 255) << bShift;
+
+    return (rVal & redMask) | (gVal & greenMask) | (bVal & blueMask);
 }
 
 Bitmap::Bitmap()
