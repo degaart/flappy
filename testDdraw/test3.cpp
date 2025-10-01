@@ -1,5 +1,6 @@
 #include "util.hpp"
 
+#include "../rng.hpp"
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
@@ -41,6 +42,7 @@ private:
     Bitmap _tiles1;
     LPDIRECTSOUND _dsound;
     std::vector<LPDIRECTSOUNDBUFFER> _sndBuffers;
+    Rng _rng;
 
     int _fps;
 
@@ -69,6 +71,10 @@ App::App(HINSTANCE hInstance)
 
 bool App::init()
 {
+    LARGE_INTEGER perfCounter;
+    QueryPerformanceCounter(&perfCounter);
+    _rng.seed(perfCounter.QuadPart);
+
     WNDCLASSEX wc;
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);
@@ -413,6 +419,12 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         case VK_F3:
             {
                 static int currentSound = 0;
+
+                float modulation = _rng.fnext() - 0.5f; /* 0.0f to 1.0f */
+                int freq = 22050 + round(11025 * modulation);
+                trace("modulation=%0.2f freq=%d", modulation, freq);
+
+                CHECK(_sndBuffers[currentSound]->SetFrequency(freq));
                 CHECK(_sndBuffers[currentSound]->Play(0, 0, 0));
                 currentSound = (currentSound+1) % _sndBuffers.size();
                 break;
