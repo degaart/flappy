@@ -3,6 +3,11 @@
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
+#include <mmeapi.h>
+#include <dsound.h>
+
+#define STB_VORBIS_HEADER_ONLY
+#include "../stb_vorbis.c"
 
 struct Bitmap
 {
@@ -34,6 +39,8 @@ private:
     std::vector<PALETTEENTRY> _paletteEntries;
     bool _active;
     Bitmap _tiles1;
+    LPDIRECTSOUND _dsound;
+    std::vector<LPDIRECTSOUNDBUFFER> _sndBuffers;
 
     int _fps;
 
@@ -52,7 +59,11 @@ private:
 };
 
 App::App(HINSTANCE hInstance)
-    : IApp(hInstance), _ddraw(nullptr), _primarySurf(nullptr), _backSurf(nullptr), _fullscreen(false), _zoom(2), _active(false)
+    : IApp(hInstance),
+    _ddraw(nullptr), _primarySurf(nullptr),
+    _backSurf(nullptr),
+    _fullscreen(false), _zoom(2), _active(false),
+    _dsound(nullptr)
 {
 }
 
@@ -110,6 +121,69 @@ bool App::init()
     trace("Palette entry 255: %d,%d,%d", _paletteEntries[255].peRed, _paletteEntries[255].peGreen, _paletteEntries[255].peBlue);
 
     createSurfaces();
+
+    CHECK(DirectSoundCreate(nullptr, &_dsound, nullptr));
+    CHECK(_dsound->SetCooperativeLevel(_hwnd, DSSCL_NORMAL));
+
+    static const char* SFX_FILES[] = {
+        "collision.ogg",
+        "jump1.ogg",
+        "jump2.ogg",
+        "jump3.ogg",
+        "jump4.ogg",
+        "jump5.ogg",
+    };
+    for (const auto& sfxFile: SFX_FILES)
+    {
+        trace("Loading %s", sfxFile);
+        int channels, sampleRate;
+        int16_t* samples;
+        auto sampleCount = stb_vorbis_decode_filename(sfxFile, &channels, &sampleRate, &samples);
+        if (sampleCount == -1)
+        {
+            panic("Failed to decode %s", sfxFile);
+        }
+        if (sampleRate != 22050)
+        {
+            panic("Unsupported samplerate for %s: %d", sfxFile, sampleRate);
+        }
+        else if (channels != 1)
+        {
+            panic("Unsupported number of channels for %s: %d", sfxFile, channels);
+        }
+
+        WAVEFORMATEX wfe;
+        memset(&wfe, 0, sizeof(wfe));
+        wfe.wFormatTag = WAVE_FORMAT_PCM;
+        wfe.nChannels = 1;
+        wfe.nSamplesPerSec = 22050;
+        wfe.wBitsPerSample = 16;
+        wfe.nBlockAlign = wfe.nChannels * (wfe.wBitsPerSample / 8); /* nChannels * nBytesPerSample */
+        wfe.nAvgBytesPerSec = wfe.nSamplesPerSec * wfe.nBlockAlign;
+        wfe.cbSize = 0;
+
+        DSBUFFERDESC dsbd;
+        memset(&dsbd, 0, sizeof(dsbd));
+        dsbd.dwSize = sizeof(dsbd);
+        dsbd.dwFlags = DSBCAPS_CTRLVOLUME | DSBCAPS_CTRLFREQUENCY | DSBCAPS_STATIC | DSBCAPS_LOCSOFTWARE;
+        dsbd.dwBufferBytes = sampleCount * sizeof(int8_t); /* 2 secs at sample rate 11025 */
+        dsbd.lpwfxFormat = &wfe;
+
+        LPDIRECTSOUNDBUFFER sndBuf;
+        CHECK(_dsound->CreateSoundBuffer(&dsbd, &sndBuf, nullptr));
+
+        void* audioPtr1;
+        unsigned long audioBytes1;
+        void* audioPtr2;
+        unsigned long audioBytes2;
+        CHECK(sndBuf->Lock(0, dsbd.dwBufferBytes, &audioPtr1, &audioBytes1, &audioPtr2, &audioBytes2, DSBLOCK_ENTIREBUFFER));
+        memcpy(audioPtr1, samples, audioBytes1);
+        CHECK(sndBuf->Unlock(audioPtr1, audioBytes1, audioPtr2, audioBytes2));
+        free(samples);
+
+        _sndBuffers.push_back(sndBuf);
+    }
+
     _active = true;
 
     UpdateWindow(hwnd);
@@ -172,6 +246,12 @@ int App::run()
 
 void App::cleanup()
 {
+    for (auto sndBuf : _sndBuffers)
+    {
+        sndBuf->Release();
+    }
+
+    _dsound->Release();
     freeSurfaces();
     if (_ddraw)
     {
@@ -330,6 +410,13 @@ std::optional<LRESULT> App::onEvent(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
             }
             createSurfaces();
             break;
+        case VK_F3:
+            {
+                static int currentSound = 0;
+                CHECK(_sndBuffers[currentSound]->Play(0, 0, 0));
+                currentSound = (currentSound+1) % _sndBuffers.size();
+                break;
+            }
         }
         break;
     case WM_MOUSEWHEEL:
