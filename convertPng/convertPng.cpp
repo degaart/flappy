@@ -6,7 +6,7 @@
 #include <string>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "../stb_image.h"
+#include "../engine/zorro/stb_image.h"
 
 extern "C" const char* __asan_default_options()
 {

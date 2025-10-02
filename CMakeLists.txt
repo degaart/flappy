@@ -69,68 +69,80 @@ mark_as_advanced(FETCHCONTENT_SOURCE_DIR_GLM FETCHCONTENT_UPDATES_DISCONNECTED_G
 ### utility executables
 add_subdirectory(convertPng)
 
+### zorro engine
+add_subdirectory(engine)
+
 ### executable
-file(GLOB SOURCE_FILES *.cpp *.c)
-file(GLOB HEADER_FILES *.hpp *.h)
-
-if (ZORRO_ENGINE_SDL)
-    file(GLOB SDL_SOURCE_FILES sdl/*.cpp sdl/*.c)
-    file(GLOB SDL_HEADER_FILES sdl/*.hpp sdl/*.h)
-    list(APPEND SOURCE_FILES ${SDL_SOURCE_FILES})
-    list(APPEND HEADER_FILES ${SDL_HEADER_FILES})
-elseif (ZORRO_ENGINE_DDRAW)
-    file(GLOB DDRAW_SOURCE_FILES ddraw/*.cpp ddraw/*.c)
-    file(GLOB DDRAW_HEADER_FILES ddraw/*.hpp ddraw/*.h)
-    list(APPEND SOURCE_FILES ${DDRAW_SOURCE_FILES})
-    list(APPEND HEADER_FILES ${DDRAW_HEADER_FILES})
-endif()
-
-add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${HEADER_FILES})
-
+file(GLOB SRC_FILES *.cpp *.c)
+file(GLOB HDR_FILES *.hpp *.h)
+add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES} ${HDR_FILES})
 if (NOT MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions)
 endif()
+target_link_libraries(${PROJECT_NAME} PUBLIC zorro)
 
-target_link_libraries(${PROJECT_NAME}
-    PUBLIC
-        glm::glm
-)
+# ### executable
+# file(GLOB SOURCE_FILES *.cpp *.c)
+# file(GLOB HEADER_FILES *.hpp *.h)
+# 
+# if (ZORRO_ENGINE_SDL)
+#     file(GLOB SDL_SOURCE_FILES sdl/*.cpp sdl/*.c)
+#     file(GLOB SDL_HEADER_FILES sdl/*.hpp sdl/*.h)
+#     list(APPEND SOURCE_FILES ${SDL_SOURCE_FILES})
+#     list(APPEND HEADER_FILES ${SDL_HEADER_FILES})
+# elseif (ZORRO_ENGINE_DDRAW)
+#     file(GLOB DDRAW_SOURCE_FILES ddraw/*.cpp ddraw/*.c)
+#     file(GLOB DDRAW_HEADER_FILES ddraw/*.hpp ddraw/*.h)
+#     list(APPEND SOURCE_FILES ${DDRAW_SOURCE_FILES})
+#     list(APPEND HEADER_FILES ${DDRAW_HEADER_FILES})
+# endif()
+# 
+# add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${HEADER_FILES})
 
-if (WIN32)
-    target_link_libraries(${PROJECT_NAME}
-        PUBLIC
-            shlwapi.lib
-    )
-endif()
+# if (NOT MSVC)
+#     target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions)
+# endif()
+# 
+# target_link_libraries(${PROJECT_NAME}
+#     PUBLIC
+#         glm::glm
+# )
+# 
+# if (WIN32)
+#     target_link_libraries(${PROJECT_NAME}
+#         PUBLIC
+#             shlwapi.lib
+#     )
+# endif()
 
-if (ZORRO_ENGINE_SDL)
-    target_include_directories(${PROJECT_NAME}
-        PUBLIC
-            sdl
-    )
-    target_link_libraries(${PROJECT_NAME}
-        PUBLIC
-            SDL3::SDL3
-    )
-elseif (ZORRO_ENGINE_DDRAW)
-    target_include_directories(${PROJECT_NAME}
-        PUBLIC
-            ddraw
-    )
-
-    target_link_libraries(${PROJECT_NAME}
-    PUBLIC
-        shlwapi
-        ddraw
-        dxguid
-        ole32
-    )
-    target_compile_definitions(${PROJECT_NAME}
-        PRIVATE
-            WIN32_LEAN_AND_MEAN
-    )
-    add_subdirectory(testDdraw)
-endif()
+# if (ZORRO_ENGINE_SDL)
+#     target_include_directories(${PROJECT_NAME}
+#         PUBLIC
+#             sdl
+#     )
+#     target_link_libraries(${PROJECT_NAME}
+#         PUBLIC
+#             SDL3::SDL3
+#     )
+# elseif (ZORRO_ENGINE_DDRAW)
+#     target_include_directories(${PROJECT_NAME}
+#         PUBLIC
+#             ddraw
+#     )
+# 
+#     target_link_libraries(${PROJECT_NAME}
+#     PUBLIC
+#         shlwapi
+#         ddraw
+#         dxguid
+#         ole32
+#     )
+#     target_compile_definitions(${PROJECT_NAME}
+#         PRIVATE
+#             WIN32_LEAN_AND_MEAN
+#     )
+#     add_subdirectory(testDdraw)
+# endif()
 
 
 

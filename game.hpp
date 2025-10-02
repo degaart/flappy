@@ -1,21 +1,17 @@
 #pragma once
 
-#include "engine.hpp"
-#include <glm/glm.hpp>
+#include <zorro/IEngine.hpp>
+#include <zorro/IGame.hpp>
 
-class Game
+class Game : public zorro::IGame
 {
 public:
-    static const char* getName();
-    static glm::ivec2 getGameScreenSize();
-
-    bool onInit(Engine& engine);
-    bool onUpdate(Engine& engine, float dT);
-    bool onRender(Engine& engine, float lag);
+    zorro::GameParams getParams() const override;
+    bool onInit(zorro::IEngine& engine) override;
+    bool onUpdate(zorro::IEngine& engine, double dT) override;
+    bool onRender(zorro::IEngine& engine, double lag) override;
+    void onCleanup(zorro::IEngine& engine) override;
 private:
-    Bitmap _doge;
-    Bitmap _tiles1;
-    int _offsetX;
-    int _offsetY;
+    zorro::IBitmap* _tiles1;
 };
 

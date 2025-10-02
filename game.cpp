@@ -1,42 +1,46 @@
 #include "game.hpp"
-#include "engine.hpp"
-#include <stdio.h>
 
-const char* Game::getName()
+zorro::GameParams Game::getParams() const
 {
-    return "Flappy";
+    return zorro::GameParams
+    {
+        "Flappy",
+        { 320, 240 }
+    };
 }
 
-glm::ivec2 Game::getGameScreenSize()
-{
-    return {320, 240};
-}
-
-bool Game::onInit(Engine& engine)
+bool Game::onInit(zorro::IEngine& engine)
 {
     auto palette = engine.loadPalette("doge.pal");
     engine.setPalette(palette);
 
-    _doge = engine.loadBitmap("doge.png");
-    _tiles1 = engine.loadBitmap("tiles1.png");
+    _tiles1 = engine.loadBitmap("tiles1.bmp");
     return true;
 }
 
-bool Game::onUpdate(Engine& engine, float dT)
+bool Game::onUpdate(zorro::IEngine& engine, double dT)
 {
-    _offsetX = std::round(sinf(engine.getTime()) * 10.0f);
-    _offsetY = std::round(cosf(engine.getTime()) * 10.0f);
+    if (engine.getKeyState(zorro::KeyID::Escape).down)
+    {
+        engine.quit();
+        return true;
+    }
     return true;
 }
 
-bool Game::onRender(Engine& engine, float lag)
+bool Game::onRender(zorro::IEngine& engine, double lag)
 {
-    char buffer[512];
-    snprintf(buffer, sizeof(buffer), "offsetx=%d offsety=%d", _offsetX, _offsetY);
-    engine.setDebugText(buffer);
-
-    engine.blit(_doge, 0, 0, _doge.w, _doge.h, 0, 0);
-    engine.blit(_tiles1, _offsetX, _offsetY, _tiles1.w, _tiles1.h, 0, 0, 195);
+    engine.clearScreen(128);
+    _tiles1->blt(0, 0, 0, 0, _tiles1->width(), _tiles1->height());
     return true;
+}
+
+void Game::onCleanup(zorro::IEngine& engine)
+{
+}
+
+zorro::IGame* zorro::makeGame()
+{
+    return new Game;
 }
 
