@@ -13,5 +13,6 @@ public:
     void onCleanup(zorro::IEngine& engine) override;
 private:
     zorro::IBitmap* _tiles1;
+    zorro::Point<float> _pos;
 };
 

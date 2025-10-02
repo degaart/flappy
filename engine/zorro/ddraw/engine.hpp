@@ -16,6 +16,14 @@
 
 namespace zorro
 {
+    struct PixelFormat
+    {
+        bool valid;
+        int rBits, gBits, bBits;
+        int rShift, gShift, bShift;
+        unsigned rMask, gMask, bMask;
+    };
+
     struct Bitmap : IBitmap
     {
         int width() const override;
@@ -27,7 +35,12 @@ namespace zorro
         std::string _filename;
         LPDIRECTDRAWSURFACE4 _surface;
         DDSURFACEDESC2 _ddsd;
-        LPDIRECTDRAWSURFACE4 _destSurf;
+        LPDIRECTDRAWSURFACE4 _dstSurf;
+        int _dstWidth;
+        int _dstHeight;
+        int _bpp;
+        const PixelFormat* _pixelFormat;
+        PALETTEENTRY* _palette;
     };
 
     struct Sfx : ISfx
@@ -45,14 +58,6 @@ namespace zorro
         Color<uint8_t> colorAt(int index) const override;
 
         std::vector<Color<uint8_t>> _colors;
-    };
-
-    struct PixelFormat
-    {
-        bool valid;
-        int rBits, gBits, bBits;
-        int rShift, gShift, bShift;
-        unsigned rMask, gMask, bMask;
     };
 
     struct Engine : public IEngine
@@ -80,6 +85,10 @@ namespace zorro
         double getTime() const override;
         void quit() override;
         int run();
+
+
+        static uint32_t makeRGB(uint8_t r, uint8_t g, uint8_t b, const PixelFormat* pf);
+
     private:
         HINSTANCE _hInstance;
         double _hrtFreq;
@@ -119,6 +128,7 @@ namespace zorro
         void onKeyDown(int vk);
         static PixelFormat makePixelFormat(const DDPIXELFORMAT* pf);
         void cleanup();
+        void reloadBitmap(Bitmap* bitmap);
     };
 
     const char* hresult2str(HRESULT hResult);

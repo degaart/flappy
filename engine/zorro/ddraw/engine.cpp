@@ -34,12 +34,12 @@ Engine::Engine(HINSTANCE hInstance)
     _pixelFormat.valid = false;
 }
 
-IBitmap* Engine::loadBitmap(const char* filename)
+void Engine::reloadBitmap(Bitmap* bmp)
 {
-    trace("Loading %s", filename);
+    trace("Loading %s", bmp->_filename.c_str());
 
     int width, height;
-    std::vector<uint8_t> data = zorro::loadBmp(filename, &width, &height);
+    std::vector<uint8_t> data = zorro::loadBmp(bmp->_filename.c_str(), &width, &height);
 
     DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
@@ -61,7 +61,8 @@ IBitmap* Engine::loadBitmap(const char* filename)
     ddsd.dwSize = sizeof(ddsd);
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR | DDLOCK_WAIT, nullptr));
 
-    switch (getBPP(&pf))
+    int bpp = getBPP(&pf);
+    switch (bpp)
     {
     case 8:
         if (ddsd.lPitch == width)
@@ -112,16 +113,25 @@ IBitmap* Engine::loadBitmap(const char* filename)
 
     CHECK(surf->Unlock(nullptr));
 
-    auto bmp = std::make_unique<Bitmap>();
-    auto result = bmp.get();
-
-    bmp->_filename = filename;
     bmp->_surface = surf;
     bmp->_ddsd.dwSize = sizeof(ddsd);
     CHECK(surf->GetSurfaceDesc(&bmp->_ddsd));
-    bmp->_destSurf = _backSurf;
-    _bitmaps.push_back(std::move(bmp));
+    bmp->_dstSurf = _backSurf;
+    bmp->_dstWidth = _ddsd.dwWidth;
+    bmp->_dstHeight = _ddsd.dwHeight;
+    bmp->_bpp = bpp;
+    bmp->_pixelFormat = &_pixelFormat;
+    bmp->_palette = _paletteEntries;
+}
 
+IBitmap* Engine::loadBitmap(const char* filename)
+{
+    auto bmp = std::make_unique<Bitmap>();
+    auto result = bmp.get();
+    bmp->_filename = filename;
+    reloadBitmap(result);
+
+    _bitmaps.push_back(std::move(bmp));
     return result;
 }
 
@@ -532,6 +542,12 @@ void Engine::createSurfaces()
     CHECK(_backSurf->GetSurfaceDesc(&_ddsd));
 
     _pixelFormat = makePixelFormat(&_ddsd.ddpfPixelFormat);
+
+    for (auto& i : _bitmaps)
+    {
+        auto bmp = static_cast<Bitmap*>(i.get());
+        reloadBitmap(bmp);
+    }
 }
 
 void Engine::update(double dT)
@@ -961,18 +977,23 @@ int Engine::getBPP(const DDPIXELFORMAT* pf)
     }
 }
 
-uint32_t Engine::makeRGB(uint8_t r, uint8_t g, uint8_t b)
+uint32_t Engine::makeRGB(uint8_t r, uint8_t g, uint8_t b, const PixelFormat* pf)
 {
-    if (!_pixelFormat.valid)
+    if (!pf->valid)
     {
         panic("Invalid _pixelFormat");
     }
 
-    auto rVal = ((r * ((1 << _pixelFormat.rBits) - 1)) / 255) << _pixelFormat.rShift;
-    auto gVal = ((g * ((1 << _pixelFormat.gBits) - 1)) / 255) << _pixelFormat.gShift;
-    auto bVal = ((b * ((1 << _pixelFormat.bBits) - 1)) / 255) << _pixelFormat.bShift;
+    auto rVal = ((r * ((1 << pf->rBits) - 1)) / 255) << pf->rShift;
+    auto gVal = ((g * ((1 << pf->gBits) - 1)) / 255) << pf->gShift;
+    auto bVal = ((b * ((1 << pf->bBits) - 1)) / 255) << pf->bShift;
 
-    return (rVal & _pixelFormat.rMask) | (gVal & _pixelFormat.gMask) | (bVal & _pixelFormat.bMask);
+    return (rVal & pf->rMask) | (gVal & pf->gMask) | (bVal & pf->bMask);
+}
+
+uint32_t Engine::makeRGB(uint8_t r, uint8_t g, uint8_t b)
+{
+    return makeRGB(r, g, b, &_pixelFormat);
 }
 
 PixelFormat Engine::makePixelFormat(const DDPIXELFORMAT* pf)
@@ -1049,7 +1070,7 @@ void Engine::freeSurfaces()
             bmp->_surface->Release();
             bmp->_surface = nullptr;
         }
-        bmp->_destSurf = nullptr;
+        bmp->_dstSurf = nullptr;
     }
 }
 
