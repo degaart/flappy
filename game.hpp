@@ -2,6 +2,7 @@
 
 #include <zorro/IEngine.hpp>
 #include <zorro/IGame.hpp>
+#include <zorro/rng.hpp>
 
 struct SpriteSheet
 {
@@ -27,5 +28,7 @@ private:
     float _accel;
     float _vel;
     zorro::Point<float> _pos;
+    zorro::ISfx* _wingSfx;
+    zorro::Rng _rng;
 };
 

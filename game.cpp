@@ -15,6 +15,9 @@ zorro::GameParams Game::getParams() const
 
 bool Game::onInit(zorro::IEngine& engine)
 {
+    double now = engine.getTime();
+    _rng.seed(*reinterpret_cast<uint64_t*>(&now));
+
     auto palette = engine.loadPalette("doge.pal");
     engine.setPalette(palette);
 
@@ -28,6 +31,8 @@ bool Game::onInit(zorro::IEngine& engine)
     _vel = 0.0f;
     _pos.x = (320 - (_tiles1._width)) / 2.0f;
     _pos.y = (240 - (_tiles1._height)) / 2.0f;
+
+    _wingSfx = engine.loadSfx("wing.ogg");
     return true;
 }
 
@@ -44,6 +49,11 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
         if (_vel > 10.0f)
         {
             _vel = -110.0f;
+
+            float modulation = _rng.fnext() - 0.5f; /* 0.0f to 1.0f */
+            int freq = 22050 + round(11025 * modulation);
+            _wingSfx->setFreq(freq);
+            _wingSfx->play();
         }
     }
 

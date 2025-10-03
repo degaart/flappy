@@ -346,7 +346,7 @@ void Engine::setPalette(const IPalette* palette)
         _paletteEntries[i + 246].peGreen = _paletteEntries[i + 246].peBlue = 0;
     }
 
-    if (_primarySurf)
+    if (_primarySurf && getBPP(&_ddsd.ddpfPixelFormat) == 0)
     {
         LPDIRECTDRAWPALETTE palette;
         CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries, &palette, nullptr));
