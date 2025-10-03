@@ -27,9 +27,12 @@ bool Game::onInit(zorro::IEngine& engine)
     _tiles1._height = _tiles1._bitmap->height();
     _tiles1._colorKey = 195;
 
+    _background = engine.loadBitmap("background.bmp");
+    _backgroundOffset = 0.0f;
+
     _accel = 100.0f;
     _vel = 0.0f;
-    _pos.x = (320 - (_tiles1._width)) / 2.0f;
+    _pos.x = 10.0f;
     _pos.y = (240 - (_tiles1._height)) / 2.0f;
 
     _wingSfx = engine.loadSfx("wing.ogg");
@@ -60,6 +63,11 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
     _vel = _vel + (_accel * dT);
     _pos.y = _pos.y + (_vel * dT);
 
+    _backgroundOffset += BACKGROUND_SPEED*dT;
+    while (_backgroundOffset > _background->width())
+    {
+        _backgroundOffset -= _background->width();
+    }
 
     char buffer[64];
     stbsp_snprintf(buffer, sizeof(buffer), "a=%0.2f v=%0.2f x=%0.2f y=%0.2f", _accel, _vel, _pos.x, _pos.y);
@@ -70,6 +78,18 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
 bool Game::onRender(zorro::IEngine& engine, double lag)
 {
     engine.clearScreen(128);
+
+    int backgroundW = 0;
+    int offset = std::round(_backgroundOffset);
+    while (backgroundW < SCREEN_WIDTH)
+    {
+        _background->blt(
+                backgroundW, 0,
+                offset, 0,
+                _background->width() - offset, _background->height());
+        backgroundW += _background->width() - offset;
+        offset = 0;
+    }
 
     int image;
     if (_vel > 5.0f)

@@ -25,10 +25,16 @@ public:
     void onCleanup(zorro::IEngine& engine) override;
 private:
     SpriteSheet _tiles1;
+    zorro::IBitmap* _background;
+    float _backgroundOffset;
     float _accel;
     float _vel;
     zorro::Point<float> _pos;
     zorro::ISfx* _wingSfx;
     zorro::Rng _rng;
+
+    static constexpr auto SCREEN_WIDTH = 320.0f;
+    static constexpr auto SCREEN_HEIGHT = 240.0f;
+    static constexpr auto BACKGROUND_SPEED = 50.0f;
 };
 
