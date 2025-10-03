@@ -21,7 +21,13 @@ if (ZORRO_ENGINE_DDRAW)
             dxguid
             dsound
             shlwapi
+            ole32
+            gdi32
     )
+
+    if (NOT MSVC)
+        target_link_options(zorro INTERFACE "-Wl,--undefined=_WinMain@16")
+    endif()
 
 endif()
 

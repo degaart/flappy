@@ -2,6 +2,7 @@
 
 #include <zorro/stb_sprintf.h>
 #include <cmath>
+#include <windows.h>
 
 zorro::GameParams Game::getParams() const
 {
@@ -17,10 +18,16 @@ bool Game::onInit(zorro::IEngine& engine)
     auto palette = engine.loadPalette("doge.pal");
     engine.setPalette(palette);
 
-    _tiles1 = engine.loadBitmap("tiles1.bmp");
+    _tiles1._bitmap = engine.loadBitmap("tiles1.bmp");
+    _tiles1._imageCount = 3;
+    _tiles1._width = _tiles1._bitmap->width() / _tiles1._imageCount;
+    _tiles1._height = _tiles1._bitmap->height();
+    _tiles1._colorKey = 195;
 
-    _pos.x = (320 - (_tiles1->width())) / 2.0f;
-    _pos.y = (240 - (_tiles1->height())) / 2.0f;
+    _accel = 100.0f;
+    _vel = 0.0f;
+    _pos.x = (320 - (_tiles1._width)) / 2.0f;
+    _pos.y = (240 - (_tiles1._height)) / 2.0f;
     return true;
 }
 
@@ -31,29 +38,21 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
         engine.quit();
         return true;
     }
-
-    if (engine.getKeyState(zorro::KeyID::Left).down)
+    
+    if (engine.getKeyState(zorro::KeyID::Space).down)
     {
-        _pos.x -= 50*dT;
+        if (_vel > 10.0f)
+        {
+            _vel = -110.0f;
+        }
     }
 
-    if (engine.getKeyState(zorro::KeyID::Right).down)
-    {
-        _pos.x += 50*dT;
-    }
+    _vel = _vel + (_accel * dT);
+    _pos.y = _pos.y + (_vel * dT);
 
-    if (engine.getKeyState(zorro::KeyID::Up).down)
-    {
-        _pos.y -= 50*dT;
-    }
-
-    if (engine.getKeyState(zorro::KeyID::Down).down)
-    {
-        _pos.y += 50*dT;
-    }
 
     char buffer[64];
-    stbsp_snprintf(buffer, sizeof(buffer), "x=%0.2f y=%0.2f", _pos.x, _pos.y);
+    stbsp_snprintf(buffer, sizeof(buffer), "a=%0.2f v=%0.2f x=%0.2f y=%0.2f", _accel, _vel, _pos.x, _pos.y);
     engine.setDebugText(buffer);
     return true;
 }
@@ -61,7 +60,21 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
 bool Game::onRender(zorro::IEngine& engine, double lag)
 {
     engine.clearScreen(128);
-    _tiles1->blt(std::round(_pos.x), std::round(_pos.y), 0, 0, _tiles1->width(), _tiles1->height(), 195);
+
+    int image;
+    if (_vel > 5.0f)
+    {
+        image = 2;
+    }
+    else if (_vel > -5.0f)
+    {
+        image = 1;
+    }
+    else
+    {
+        image = 0;
+    }
+    _tiles1.blt(std::round(_pos.x), std::round(_pos.y), image);
     return true;
 }
 
@@ -72,5 +85,10 @@ void Game::onCleanup(zorro::IEngine& engine)
 zorro::IGame* zorro::makeGame()
 {
     return new Game;
+}
+
+void SpriteSheet::blt(int dstX, int dstY, int imageIndex)
+{
+    _bitmap->blt(dstX, dstY, imageIndex * _width, 0, _width, _height, _colorKey);
 }
 

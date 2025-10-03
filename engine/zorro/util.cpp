@@ -1,7 +1,9 @@
 #include "util.hpp"
 
+#include <algorithm>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 std::vector<std::string_view> zorro::split(std::string_view str, std::string_view sep)
 {
@@ -73,7 +75,7 @@ struct BMPInfoHeader
 
 std::vector<uint8_t> zorro::loadBmp(const char* filename, int* width, int* height)
 {
-    FILE* f = std::fopen(filename, "rb");
+    FILE* f = fopen(filename, "rb");
     if (!f)
     {
         panic("Failed to open file %s", filename);
@@ -82,15 +84,15 @@ std::vector<uint8_t> zorro::loadBmp(const char* filename, int* width, int* heigh
     BMPFileHeader fileHeader;
     BMPInfoHeader infoHeader;
 
-    if (std::fread(&fileHeader, sizeof(fileHeader), 1, f) != 1 || std::fread(&infoHeader, sizeof(infoHeader), 1, f) != 1)
+    if (fread(&fileHeader, sizeof(fileHeader), 1, f) != 1 || fread(&infoHeader, sizeof(infoHeader), 1, f) != 1)
     {
-        std::fclose(f);
+        fclose(f);
         panic("Invalid BMP file: %s", filename);
     }
 
     if (fileHeader.bfType != 0x4D42 || infoHeader.biBitCount != 8)
     {
-        std::fclose(f);
+        fclose(f);
         panic("Invalid pixel format: %s", filename);
     }
 
@@ -100,15 +102,15 @@ std::vector<uint8_t> zorro::loadBmp(const char* filename, int* width, int* heigh
     size_t dataSize = rowSize * *height;
 
     size_t paletteSize = (infoHeader.biClrUsed ? infoHeader.biClrUsed : 256) * 4;
-    std::fseek(f, sizeof(BMPFileHeader) + infoHeader.biSize + paletteSize, SEEK_SET);
+    fseek(f, sizeof(BMPFileHeader) + infoHeader.biSize + paletteSize, SEEK_SET);
 
     std::vector<uint8_t> data(dataSize);
-    if (std::fread(data.data(), 1, dataSize, f) != dataSize)
+    if (fread(data.data(), 1, dataSize, f) != dataSize)
     {
-        std::fclose(f);
+        fclose(f);
         panic("Failed to read pixel data: %s", filename);
     }
-    std::fclose(f);
+    fclose(f);
 
     std::vector<uint8_t> pixels(*width * *height);
     for (int y = 0; y < *height; ++y)

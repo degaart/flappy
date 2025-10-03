@@ -4,6 +4,7 @@
 #include <zorro/IGame.hpp>
 #include <zorro/stb_sprintf.h>
 #include <zorro/util.hpp>
+#include <cmath>
 
 #define STB_VORBIS_HEADER_ONLY
 #include <zorro/stb_vorbis.c>
@@ -344,6 +345,14 @@ void Engine::setPalette(const IPalette* palette)
         _paletteEntries[i + 246].peRed = i + 246;
         _paletteEntries[i + 246].peGreen = _paletteEntries[i + 246].peBlue = 0;
     }
+
+    if (_primarySurf)
+    {
+        LPDIRECTDRAWPALETTE palette;
+        CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries, &palette, nullptr));
+        CHECK(_primarySurf->SetPalette(palette));
+        palette->Release();
+    }
 }
 
 int Engine::run()
@@ -444,7 +453,7 @@ int Engine::run()
             frameTimer += elapsed;
             if (frameTimer >= 1.0)
             {
-                _fps = round(frames / frameTimer);
+                _fps = std::round(frames / frameTimer);
                 frameTimer = 0;
                 frames = 0;
             }
