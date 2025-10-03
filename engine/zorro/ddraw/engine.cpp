@@ -1158,12 +1158,6 @@ void Engine::cleanup()
     _game.reset();
 
     freeSurfaces();
-    if (_dsound)
-    {
-        _dsound->Release();
-        _dsound = nullptr;
-    }
-
     if (_ddraw)
     {
         _ddraw->Release();
@@ -1178,6 +1172,11 @@ void Engine::cleanup()
             sfx->_sndBuf->Release();
             sfx->_sndBuf = nullptr;
         }
+    }
+    if (_dsound)
+    {
+        _dsound->Release();
+        _dsound = nullptr;
     }
 
     CoUninitialize();
