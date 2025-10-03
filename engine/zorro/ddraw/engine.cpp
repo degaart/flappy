@@ -446,6 +446,10 @@ int Engine::run()
             while (lag > dT)
             {
                 update(dT);
+                for (auto& ks : _keyState)
+                {
+                    ks.second.repeat = ks.second.down;
+                }
                 lag -= dT;
             }
 
@@ -596,11 +600,13 @@ void Engine::render()
         }
     }
 
+#if 1
     HDC hdc;
     CHECK(_backSurf->GetDC(&hdc));
     SetTextColor(hdc, RGB(255, 0, 0));
     TextOut(hdc, 0, 0, debugText, lstrlen(debugText));
     _backSurf->ReleaseDC(hdc);
+#endif
 
     if (_fullscreen)
     {

@@ -19,6 +19,13 @@ namespace zorro
     };
 
     template <typename T>
+    struct Rect
+    {
+        T x, y;
+        T w, h;
+    };
+
+    template <typename T>
     struct Color
     {
         T r;
