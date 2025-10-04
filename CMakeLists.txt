@@ -8,6 +8,16 @@ cmake_policy(SET CMP0135 NEW)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Disable exceptions and RTTI
+if (MSVC) # or MSVC to be specific
+	# turn off RTTI and Exceptions (including in STL)
+	string(REGEX REPLACE "/GR" "/GR-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+	string(REGEX REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+	add_definitions(-D_HAS_EXCEPTIONS=0) # for STL
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
+endif()
+
 # emscripten
 if (EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX .html)
@@ -76,9 +86,6 @@ add_subdirectory(engine)
 file(GLOB SRC_FILES *.cpp *.c)
 file(GLOB HDR_FILES *.hpp *.h)
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES} ${HDR_FILES})
-if (NOT MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions)
-endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC zorro)
 
 
