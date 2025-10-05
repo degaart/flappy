@@ -42,22 +42,14 @@ void Engine::reloadBitmap(Bitmap* bmp)
     int width, height;
     std::vector<uint8_t> data = zorro::loadBmp(bmp->_filename.c_str(), &width, &height);
 
-    DDSURFACEDESC2 ddsd;
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-    ddsd.dwWidth = width;
-    ddsd.dwHeight = height;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_VIDEOMEMORY;
-
-    LPDIRECTDRAWSURFACE4 surf;
-    CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
+    auto surf = createOffscreenSurface(width, height);
 
     DDPIXELFORMAT pf;
     memset(&pf, 0, sizeof(pf));
     pf.dwSize = sizeof(pf);
     CHECK(surf->GetPixelFormat(&pf));
 
+    DDSURFACEDESC2 ddsd;
     memset(&ddsd, 0, sizeof(ddsd));
     ddsd.dwSize = sizeof(ddsd);
     CHECK(surf->Lock(nullptr, &ddsd, DDLOCK_SURFACEMEMORYPTR | DDLOCK_WAIT, nullptr));
@@ -343,7 +335,7 @@ void Engine::setPalette(const IPalette* palette)
         _paletteEntries[i + 246].peGreen = _paletteEntries[i + 246].peBlue = 0;
     }
 
-    if (_primarySurf && getBPP(&_ddsd.ddpfPixelFormat) == 0)
+    if (_primarySurf && getBPP(&_ddsd.ddpfPixelFormat) == 8)
     {
         LPDIRECTDRAWPALETTE palette;
         CHECK(_ddraw->CreatePalette(DDPCAPS_8BIT | DDPCAPS_INITIALIZE, _paletteEntries, &palette, nullptr));
@@ -532,14 +524,7 @@ void Engine::createSurfaces()
     }
     else
     {
-        DDSURFACEDESC2 ddsd;
-        memset(&ddsd, 0, sizeof(ddsd));
-        ddsd.dwSize = sizeof(ddsd);
-        ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-        ddsd.dwWidth = _params.size.width;
-        ddsd.dwHeight = _params.size.height;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_VIDEOMEMORY;
-        CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
+        _backSurf = createOffscreenSurface(_params.size.width, _params.size.height);
 
         LPDIRECTDRAWCLIPPER clipper;
         CHECK(_ddraw->CreateClipper(0, &clipper, nullptr));
@@ -625,6 +610,7 @@ void Engine::render()
         srcRect.top = 0;
         srcRect.right = _ddsd.dwWidth;
         srcRect.bottom = _ddsd.dwHeight;
+        REPORT(_ddraw->WaitForVerticalBlank(DDWAITVB_BLOCKBEGIN, nullptr));
         REPORT(_primarySurf->Blt(&dstRect, _backSurf, &srcRect, DDBLT_WAIT, nullptr));
     }
 }
@@ -1182,5 +1168,31 @@ void Engine::cleanup()
 void Engine::quit()
 {
     PostMessageA(_hwnd, WM_CLOSE, 0, 0);
+}
+
+LPDIRECTDRAWSURFACE4 Engine::createOffscreenSurface(int width, int height)
+{
+    DDSURFACEDESC2 ddsd;
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.dwWidth = width;
+    ddsd.dwHeight = height;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_VIDEOMEMORY;
+
+    LPDIRECTDRAWSURFACE4 surf;
+    if (auto ret = _ddraw->CreateSurface(&ddsd, &surf, nullptr); FAILED(ret))
+    {
+        if (ret == DDERR_OUTOFVIDEOMEMORY)
+        {
+            ddsd.ddsCaps.dwCaps &= ~DDSCAPS_VIDEOMEMORY;
+            CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
+        }
+        else
+        {
+            panic("CreateSurface failed: 0x%X %s", ret, hresult2str(ret));
+        }
+    }
+    return surf;
 }
 

@@ -4,7 +4,7 @@
 #include <zorro/IGame.hpp>
 #include <zorro/rng.hpp>
 #include <vector>
-#include <deque>
+#include <list>
 
 struct SpriteSheet
 {
@@ -38,14 +38,14 @@ private:
     zorro::IBitmap* _ground;
     float _groundOffset;
     SpriteSheet _tiles2;
-    int _currentPipe;
     float _accel;
     float _vel;
     zorro::Point<float> _pos;
     zorro::ISfx* _wingSfx;
     zorro::Rng _rng;
     float _pipeTimer;
-    std::deque<Pipe> _pipes;
+    std::list<Pipe> _pipes;
+    float _minGap;
 
     static constexpr auto SCREEN_WIDTH = 320.0f;
     static constexpr auto SCREEN_HEIGHT = 240.0f;

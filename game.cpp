@@ -38,12 +38,8 @@ bool Game::onInit(zorro::IEngine& engine)
 
     _tiles2._bitmap = engine.loadBitmap("pipes.bmp");
     _tiles2._colorKey = 195;
-    _tiles2.addImage(0, 0, 26, 14);
-    _tiles2.addImage(0, 14, 26, (_tiles2._bitmap->height() / 2) - 14);
-    _tiles2.addImage(0, _tiles2._bitmap->height() / 2, 26, (_tiles2._bitmap->height() / 2) - 14);
-    _tiles2.addImage(0, _tiles2._bitmap->height() - 14, 26, 14);
-    assert(_tiles2._images[0].h + _tiles2._images[1].h + _tiles2._images[2].h + _tiles2._images[3].h == 240);
-    _currentPipe = 0;
+    _tiles2.addImage(0, 0, _tiles2._bitmap->width()/2, _tiles2._bitmap->height());
+    _tiles2.addImage(_tiles2._bitmap->width()/2, 0, _tiles2._bitmap->width()/2, _tiles2._bitmap->height());
 
     _accel = 100.0f;
     _vel = 0.0f;
@@ -53,6 +49,8 @@ bool Game::onInit(zorro::IEngine& engine)
     _wingSfx = engine.loadSfx("wing.ogg");
 
     _pipeTimer = PIPE_RATE_MIN + (PIPE_RATE * _rng.fnext());
+    _minGap = _tiles1._images[0].h * 4.0f;
+
     return true;
 }
 
@@ -74,22 +72,6 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
             int freq = 22050 + round(11025 * modulation);
             _wingSfx->setFreq(freq);
             _wingSfx->play();
-        }
-    }
-
-    if (engine.getKeyState(zorro::KeyID::Left).down && !engine.getKeyState(zorro::KeyID::Left).repeat)
-    {
-        if (_currentPipe > 0)
-        {
-            _currentPipe--;
-        }
-    }
-
-    if (engine.getKeyState(zorro::KeyID::Right).down && !engine.getKeyState(zorro::KeyID::Right).repeat)
-    {
-        if (_currentPipe < _tiles2._images.size() - 1)
-        {
-            _currentPipe++;
         }
     }
 
@@ -120,25 +102,28 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
         }
     }
 
+    if (_minGap > _tiles1._images[0].h * 1.5f)
+    {
+        _minGap -= dT / 5.0f;
+    }
+
     if (_pipeTimer > dT)
     {
         _pipeTimer -= dT;
     }
     else
     {
-        const auto tileH = _tiles2._images[0].h;
-
         Pipe newPipe;
         newPipe.x = SCREEN_WIDTH;
-        newPipe.upperGap = std::round(rand(20.0f, (SCREEN_HEIGHT - tileH) / 2));
-        newPipe.lowerGap = std::round(rand(newPipe.upperGap + tileH + (_tiles1._images[0].h * 2.0f), SCREEN_HEIGHT - 40.0f));
+        newPipe.upperGap = std::round(rand(30.0f, (SCREEN_HEIGHT - _minGap) / 2));
+        newPipe.lowerGap = std::round(rand(newPipe.upperGap + _minGap, SCREEN_HEIGHT - 30));
         _pipes.push_back(newPipe);
         _pipeTimer = PIPE_RATE_MIN + (PIPE_RATE * _rng.fnext());
     }
 
-    char buffer[64];
-    stbsp_snprintf(buffer, sizeof(buffer), "pipe=%0.2f", _pipeTimer);
-    engine.setDebugText(buffer);
+    char debugText[64];
+    stbsp_snprintf(debugText, sizeof(debugText), "minGap=%0.2f", _minGap);
+    engine.setDebugText(debugText);
     return true;
 }
 
@@ -182,9 +167,6 @@ bool Game::onRender(zorro::IEngine& engine, double lag)
     for (const auto& pipe : _pipes)
     {
         _tiles2.blt(std::round(pipe.x), pipe.upperGap - _tiles2._images[1].h - 1, 1);
-        _tiles2.blt(std::round(pipe.x), pipe.upperGap - _tiles2._images[3].h, 3);
-
-        _tiles2.blt(std::round(pipe.x), pipe.lowerGap + _tiles2._images[0].h, 2);
         _tiles2.blt(std::round(pipe.x), pipe.lowerGap, 0);
     }
 

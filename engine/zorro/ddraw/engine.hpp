@@ -129,6 +129,7 @@ namespace zorro
         static PixelFormat makePixelFormat(const DDPIXELFORMAT* pf);
         void cleanup();
         void reloadBitmap(Bitmap* bitmap);
+        LPDIRECTDRAWSURFACE4 createOffscreenSurface(int width, int height);
     };
 
     const char* hresult2str(HRESULT hResult);
