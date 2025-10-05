@@ -1,10 +1,10 @@
 #include "engine.hpp"
 
+#include <cmath>
 #include <shlwapi.h>
 #include <zorro/IGame.hpp>
 #include <zorro/stb_sprintf.h>
 #include <zorro/util.hpp>
-#include <cmath>
 
 #define STB_VORBIS_HEADER_ONLY
 #include <zorro/stb_vorbis.c>
@@ -48,7 +48,7 @@ void Engine::reloadBitmap(Bitmap* bmp)
     ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
     ddsd.dwWidth = width;
     ddsd.dwHeight = height;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_VIDEOMEMORY;
 
     LPDIRECTDRAWSURFACE4 surf;
     CHECK(_ddraw->CreateSurface(&ddsd, &surf, nullptr));
@@ -310,10 +310,7 @@ KeyState Engine::getKeyState(KeyID key) const
     auto it = _keyState.find(key);
     if (it == _keyState.end())
     {
-        return KeyState
-        {
-            false, false
-        };
+        return KeyState {false, false};
     }
 
     return it->second;
@@ -541,7 +538,7 @@ void Engine::createSurfaces()
         ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
         ddsd.dwWidth = _params.size.width;
         ddsd.dwHeight = _params.size.height;
-        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_VIDEOMEMORY;
         CHECK(_ddraw->CreateSurface(&ddsd, &_backSurf, nullptr));
 
         LPDIRECTDRAWCLIPPER clipper;
