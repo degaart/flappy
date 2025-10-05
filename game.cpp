@@ -295,14 +295,17 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
 
 void GameOverState::onEnter(zorro::IEngine& engine, class Game& game)
 {
-    _timer = 2.0f;
-    game._gameOverVisible = true;
+    _timer = 3.0f;
     game._dieSfx->play();
 }
 
 void GameOverState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
 {
     _timer -= dT;
+    if (_timer < 2.0f)
+    {
+        game._gameOverVisible = true;
+    }
     if (_timer < 0.0f)
     {
         game._gameOverVisible = false;
