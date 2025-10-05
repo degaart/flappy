@@ -352,6 +352,26 @@ int Engine::run()
     GameParams params = _game->getParams();
     _params = params;
 
+    LPDIRECTDRAW ddraw;
+    CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
+    CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
+    ddraw->Release();
+    ddraw = nullptr;
+
+    DDSURFACEDESC2 ddsd;
+    ddsd.dwSize = sizeof(ddsd);
+    CHECK(_ddraw->GetDisplayMode(&ddsd));
+
+    _zoom = ddsd.dwWidth / _params.size.width;
+    if (ddsd.dwHeight / _params.size.height < _zoom)
+    {
+        _zoom = ddsd.dwHeight / _params.size.height;
+    }
+    if (_zoom < 1)
+    {
+        _zoom = 1;
+    }
+
     WNDCLASSEX wc;
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);
@@ -382,11 +402,6 @@ int Engine::run()
         return 1;
     }
 
-    LPDIRECTDRAW ddraw;
-    CHECK(DirectDrawCreate(nullptr, &ddraw, nullptr));
-    CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
-    ddraw->Release();
-    ddraw = nullptr;
 
     createSurfaces();
 
