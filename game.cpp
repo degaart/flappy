@@ -73,7 +73,7 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
     }
 
     char debugText[64];
-    stbsp_snprintf(debugText, sizeof(debugText), "minGap=%0.2f", _minGap);
+    stbsp_snprintf(debugText, sizeof(debugText), "score=%d", _score);
     engine.setDebugText(debugText);
 
     if (_nextState)
@@ -199,6 +199,7 @@ void IdleState::onEnter(zorro::IEngine& engine, class Game& game)
     game._pipeTimer = Game::PIPE_RATE_MIN + (Game::PIPE_RATE * game._rng.fnext());
     game._minGap = game._tiles1._images[0].h * 4.0f;
     game._pipes.clear();
+    game._score = 0;
 }
 
 void IdleState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
@@ -244,6 +245,13 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
         game._groundOffset -= game._ground->width();
     }
 
+    // Generate bird hitbox
+    zorro::Rect<float> birdHitbox;
+    birdHitbox.x = game._pos.x + 1;
+    birdHitbox.y = game._pos.y + 1;
+    birdHitbox.w = game._tiles1._images[0].w - 2;
+    birdHitbox.h = game._tiles1._images[0].h - 2;
+
     for (auto it = game._pipes.begin(), next_it = game._pipes.begin(); it != game._pipes.end(); it = next_it)
     {
         next_it = it;
@@ -253,6 +261,34 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
         if (it->x < -game._tiles2._images[0].w)
         {
             game._pipes.erase(it);
+        }
+        else if (!it->counted && it->x + game._tiles2._images[0].w < game._pos.x)
+        {
+            it->counted = true;
+            game._score++;
+        }
+        else
+        {
+            zorro::Rect<float> pipeRect;
+            pipeRect.x = it->x;
+            pipeRect.y = 0.0f;
+            pipeRect.w = game._tiles2._images[0].w;
+            pipeRect.h = it->upperGap;
+            if (Game::checkCollision(birdHitbox, pipeRect))
+            {
+                game.setState(engine, &Game::_gameOverState);
+                break;
+            }
+
+            pipeRect.x = it->x;
+            pipeRect.y = it->lowerGap;
+            pipeRect.w = game._tiles2._images[0].w;
+            pipeRect.h = Game::SCREEN_HEIGHT - it->lowerGap;
+            if (Game::checkCollision(birdHitbox, pipeRect))
+            {
+                game.setState(engine, &Game::_gameOverState);
+                break;
+            }
         }
     }
 
@@ -271,17 +307,12 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
         newPipe.x = Game::SCREEN_WIDTH;
         newPipe.upperGap = std::round(game.rand(30.0f, (Game::SCREEN_HEIGHT - game._minGap) / 2));
         newPipe.lowerGap = std::round(game.rand(newPipe.upperGap + game._minGap, Game::SCREEN_HEIGHT - 30));
+        newPipe.counted = false;
         game._pipes.push_back(newPipe);
         game._pipeTimer = Game::PIPE_RATE_MIN + (Game::PIPE_RATE * game._rng.fnext());
     }
 
     // Check ground collision
-    zorro::Rect<float> birdHitbox;
-    birdHitbox.x = game._pos.x;
-    birdHitbox.y = game._pos.y;
-    birdHitbox.w = game._tiles1._images[0].w;
-    birdHitbox.h = game._tiles1._images[0].h;
-
     zorro::Rect<float> groundHitbox;
     groundHitbox.x = 0;
     groundHitbox.y = game._groundY;

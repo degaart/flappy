@@ -21,6 +21,7 @@ struct Pipe
     float x;
     int upperGap;
     int lowerGap;
+    bool counted;
 };
 
 class IState
@@ -91,6 +92,7 @@ private:
     std::list<Pipe> _pipes;
     float _minGap;
     float _groundY;
+    int _score;
 
     static constexpr auto SCREEN_WIDTH = 320.0f;
     static constexpr auto SCREEN_HEIGHT = 240.0f;
