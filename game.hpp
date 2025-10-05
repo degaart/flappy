@@ -87,6 +87,7 @@ private:
     zorro::Point<float> _pos;
     zorro::ISfx* _wingSfx;
     zorro::ISfx* _dieSfx;
+    zorro::ISfx* _pointSfx;
     zorro::Rng _rng;
     float _pipeTimer;
     std::list<Pipe> _pipes;

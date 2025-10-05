@@ -51,6 +51,7 @@ bool Game::onInit(zorro::IEngine& engine)
 
     _wingSfx = engine.loadSfx("wing.ogg");
     _dieSfx = engine.loadSfx("die.ogg");
+    _pointSfx = engine.loadSfx("point.ogg");
 
     _state = nullptr;
     _nextState = nullptr;
@@ -266,6 +267,11 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
         {
             it->counted = true;
             game._score++;
+
+            float modulation = game._rng.fnext() - 0.5f; /* 0.0f to 1.0f */
+            int freq = 22050 + round(11025 * modulation);
+            game._pointSfx->setFreq(freq);
+            game._pointSfx->play();
         }
         else
         {
