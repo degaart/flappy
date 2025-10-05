@@ -6,6 +6,10 @@
 #include <zorro/stb_sprintf.h>
 #include <zorro/util.hpp>
 
+IdleState Game::_idleState;
+RunningState Game::_runningState;
+GameOverState Game::_gameOverState;
+
 float Game::rand(float min, float max)
 {
     return min + ((max - min) * _rng.fnext());
@@ -31,25 +35,26 @@ bool Game::onInit(zorro::IEngine& engine)
     _tiles1._colorKey = 195;
 
     _background = engine.loadBitmap("background.bmp");
-    _backgroundOffset = 0.0f;
 
     _ground = engine.loadBitmap("ground.bmp");
-    _groundOffset = 0.0f;
+    _groundY = SCREEN_HEIGHT - _ground->height();
 
     _tiles2._bitmap = engine.loadBitmap("pipes.bmp");
     _tiles2._colorKey = 195;
-    _tiles2.addImage(0, 0, _tiles2._bitmap->width()/2, _tiles2._bitmap->height());
-    _tiles2.addImage(_tiles2._bitmap->width()/2, 0, _tiles2._bitmap->width()/2, _tiles2._bitmap->height());
+    _tiles2.addImage(0, 0, _tiles2._bitmap->width() / 2, _tiles2._bitmap->height());
+    _tiles2.addImage(_tiles2._bitmap->width() / 2, 0, _tiles2._bitmap->width() / 2, _tiles2._bitmap->height());
 
-    _accel = 100.0f;
-    _vel = 0.0f;
-    _pos.x = 10.0f;
-    _pos.y = (240 - (_tiles1._images[0].h)) / 2.0f;
+    _gameOver = engine.loadBitmap("gameover.bmp");
+    _gameOverVisible = false;
+    _message = engine.loadBitmap("message.bmp");
+    _messageVisible = false;
 
     _wingSfx = engine.loadSfx("wing.ogg");
+    _dieSfx = engine.loadSfx("die.ogg");
 
-    _pipeTimer = PIPE_RATE_MIN + (PIPE_RATE * _rng.fnext());
-    _minGap = _tiles1._images[0].h * 4.0f;
+    _state = nullptr;
+    _nextState = nullptr;
+    setState(engine, &_idleState);
 
     return true;
 }
@@ -62,68 +67,28 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
         return true;
     }
 
-    if (engine.getKeyState(zorro::KeyID::Space).down)
+    if (_state)
     {
-        if (_vel > 10.0f)
-        {
-            _vel = -110.0f;
-
-            float modulation = _rng.fnext() - 0.5f; /* 0.0f to 1.0f */
-            int freq = 22050 + round(11025 * modulation);
-            _wingSfx->setFreq(freq);
-            _wingSfx->play();
-        }
-    }
-
-    _vel = _vel + (_accel * dT);
-    _pos.y = _pos.y + (_vel * dT);
-
-    _backgroundOffset += BACKGROUND_SPEED * dT;
-    while (_backgroundOffset > _background->width())
-    {
-        _backgroundOffset -= _background->width();
-    }
-
-    _groundOffset += GROUND_SPEED * dT;
-    while (_groundOffset > _ground->width())
-    {
-        _groundOffset -= _ground->width();
-    }
-
-    for (auto it = _pipes.begin(), next_it = _pipes.begin(); it != _pipes.end(); it = next_it)
-    {
-        next_it = it;
-        ++next_it;
-
-        it->x -= PIPE_SPEED * dT;
-        if (it->x < -_tiles2._images[0].w)
-        {
-            _pipes.erase(it);
-        }
-    }
-
-    if (_minGap > _tiles1._images[0].h * 1.5f)
-    {
-        _minGap -= dT / 5.0f;
-    }
-
-    if (_pipeTimer > dT)
-    {
-        _pipeTimer -= dT;
-    }
-    else
-    {
-        Pipe newPipe;
-        newPipe.x = SCREEN_WIDTH;
-        newPipe.upperGap = std::round(rand(30.0f, (SCREEN_HEIGHT - _minGap) / 2));
-        newPipe.lowerGap = std::round(rand(newPipe.upperGap + _minGap, SCREEN_HEIGHT - 30));
-        _pipes.push_back(newPipe);
-        _pipeTimer = PIPE_RATE_MIN + (PIPE_RATE * _rng.fnext());
+        _state->onUpdate(engine, *this, dT);
     }
 
     char debugText[64];
     stbsp_snprintf(debugText, sizeof(debugText), "minGap=%0.2f", _minGap);
     engine.setDebugText(debugText);
+
+    if (_nextState)
+    {
+        if (_state)
+        {
+            _state->onExit(engine, *this);
+        }
+
+        _state = _nextState;
+        _nextState = nullptr;
+
+        _state->onEnter(engine, *this);
+    }
+
     return true;
 }
 
@@ -139,11 +104,10 @@ bool Game::onRender(zorro::IEngine& engine, double lag)
     }
 
     int groundW = 0;
-    int groundY = SCREEN_HEIGHT - _ground->height();
     offset = std::round(_groundOffset);
     while (groundW < SCREEN_WIDTH)
     {
-        _ground->blt(groundW, groundY, offset, 0, _ground->width() - offset, _ground->height());
+        _ground->blt(groundW, _groundY, offset, 0, _ground->width() - offset, _ground->height());
         groundW += _ground->width() - offset;
         offset = 0;
     }
@@ -170,11 +134,35 @@ bool Game::onRender(zorro::IEngine& engine, double lag)
         _tiles2.blt(std::round(pipe.x), pipe.lowerGap, 0);
     }
 
+    if (_gameOverVisible)
+    {
+        int x = (SCREEN_WIDTH - _gameOver->width()) / 2;
+        int y = (SCREEN_HEIGHT - _gameOver->height()) / 2;
+        _gameOver->blt(x, y, 0, 0, _gameOver->width(), _gameOver->height(), 195);
+    }
+
+    if (_messageVisible)
+    {
+        int x = (SCREEN_WIDTH - _message->width()) / 2;
+        int y = (SCREEN_HEIGHT - _message->height()) / 2;
+        _message->blt(x, y, 0, 0, _message->width(), _message->height(), 195);
+    }
+
     return true;
 }
 
 void Game::onCleanup(zorro::IEngine& engine)
 {
+}
+
+bool Game::checkCollision(const zorro::Rect<float>& a, const zorro::Rect<float>& b)
+{
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+void Game::setState(zorro::IEngine& engine, IState* newState)
+{
+    _nextState = newState;
 }
 
 zorro::IGame* zorro::makeGame()
@@ -196,5 +184,129 @@ void SpriteSheet::addImage(int x, int y, int w, int h)
     rect.w = w;
     rect.h = h;
     _images.push_back(rect);
+}
+
+
+void IdleState::onEnter(zorro::IEngine& engine, class Game& game)
+{
+    game._messageVisible = true;
+    game._backgroundOffset = 0.0f;
+    game._groundOffset = 0.0f;
+    game._accel = 100.0f;
+    game._vel = 0.0f;
+    game._pos.x = 10.0f;
+    game._pos.y = (240 - (game._tiles1._images[0].h)) / 2.0f;
+    game._pipeTimer = Game::PIPE_RATE_MIN + (Game::PIPE_RATE * game._rng.fnext());
+    game._minGap = game._tiles1._images[0].h * 4.0f;
+    game._pipes.clear();
+}
+
+void IdleState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
+{
+    if (auto state = engine.getKeyState(zorro::KeyID::Space); state.down && !state.repeat)
+    {
+        game._messageVisible = false;
+        game.setState(engine, &Game::_runningState);
+    }
+}
+
+void RunningState::onEnter(zorro::IEngine& engine, class Game& game)
+{
+}
+
+void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
+{
+    if (engine.getKeyState(zorro::KeyID::Space).down)
+    {
+        if (game._vel > 10.0f)
+        {
+            game._vel = -110.0f;
+
+            float modulation = game._rng.fnext() - 0.5f; /* 0.0f to 1.0f */
+            int freq = 22050 + round(11025 * modulation);
+            game._wingSfx->setFreq(freq);
+            game._wingSfx->play();
+        }
+    }
+
+    game._vel = game._vel + (game._accel * dT);
+    game._pos.y = game._pos.y + (game._vel * dT);
+
+    game._backgroundOffset += Game::BACKGROUND_SPEED * dT;
+    while (game._backgroundOffset > game._background->width())
+    {
+        game._backgroundOffset -= game._background->width();
+    }
+
+    game._groundOffset += Game::GROUND_SPEED * dT;
+    while (game._groundOffset > game._ground->width())
+    {
+        game._groundOffset -= game._ground->width();
+    }
+
+    for (auto it = game._pipes.begin(), next_it = game._pipes.begin(); it != game._pipes.end(); it = next_it)
+    {
+        next_it = it;
+        ++next_it;
+
+        it->x -= Game::PIPE_SPEED * dT;
+        if (it->x < -game._tiles2._images[0].w)
+        {
+            game._pipes.erase(it);
+        }
+    }
+
+    if (game._minGap > game._tiles1._images[0].h * 1.5f)
+    {
+        game._minGap -= dT / 5.0f;
+    }
+
+    if (game._pipeTimer > dT)
+    {
+        game._pipeTimer -= dT;
+    }
+    else
+    {
+        Pipe newPipe;
+        newPipe.x = Game::SCREEN_WIDTH;
+        newPipe.upperGap = std::round(game.rand(30.0f, (Game::SCREEN_HEIGHT - game._minGap) / 2));
+        newPipe.lowerGap = std::round(game.rand(newPipe.upperGap + game._minGap, Game::SCREEN_HEIGHT - 30));
+        game._pipes.push_back(newPipe);
+        game._pipeTimer = Game::PIPE_RATE_MIN + (Game::PIPE_RATE * game._rng.fnext());
+    }
+
+    // Check ground collision
+    zorro::Rect<float> birdHitbox;
+    birdHitbox.x = game._pos.x;
+    birdHitbox.y = game._pos.y;
+    birdHitbox.w = game._tiles1._images[0].w;
+    birdHitbox.h = game._tiles1._images[0].h;
+
+    zorro::Rect<float> groundHitbox;
+    groundHitbox.x = 0;
+    groundHitbox.y = game._groundY;
+    groundHitbox.w = Game::SCREEN_WIDTH;
+    groundHitbox.h = Game::SCREEN_HEIGHT - game._groundY;
+    if (Game::checkCollision(birdHitbox, groundHitbox))
+    {
+        game.setState(engine, &Game::_gameOverState);
+    }
+}
+
+void GameOverState::onEnter(zorro::IEngine& engine, class Game& game)
+{
+    _timer = 2.0f;
+    game._gameOverVisible = true;
+    game._dieSfx->play();
+}
+
+void GameOverState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
+{
+    _timer -= dT;
+    if (_timer < 0.0f)
+    {
+        game._gameOverVisible = false;
+        game.setState(engine, &Game::_idleState);
+    }
 }
 
