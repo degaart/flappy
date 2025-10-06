@@ -1,14 +1,34 @@
-#include <shlwapi.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <string.h>
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "../engine/zorro/stb_sprintf.h"
 
 /***************************************************************************************************/
+#ifdef _WIN32
 inline char* strlcpy(char* dst, const char* src, size_t size) noexcept;
+#endif
+
+const char* getBasename(const char* path)
+{
+    if (!path || !*path)
+    {
+        return path;
+    }
+
+    const char* lastSlash = strrchr(path, '/');
+#ifdef _WIN32
+    const char* lastBackslash = strrchr(path, '\\');
+    if (!lastSlash || (lastBackslash && lastBackslash > lastSlash))
+    {
+        lastSlash = lastBackslash;
+    }
+#endif
+    return lastSlash ? lastSlash + 1 : path;
+}
 
 [[noreturn]] static void __panic(const char* file, int line, const char* fmt, ...)
 {
@@ -19,15 +39,15 @@ inline char* strlcpy(char* dst, const char* src, size_t size) noexcept;
     stbsp_vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
 
-    char filename[260];
-    strlcpy(filename, file, sizeof(filename));
-    PathStripPathA(filename);
-    fprintf(stderr, "[%s:%d] %s\n", filename, line, buffer);
+    const char* baseName = getBasename(file);
+
+    fprintf(stderr, "[%s:%d] %s\n", baseName, line, buffer);
     abort();
 }
 
 #define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
 
+#ifdef _WIN32
 inline char* strlcpy(char* dst, const char* src, size_t size) noexcept
 {
     auto srclen = strlen(src);
@@ -50,6 +70,7 @@ inline char* strlcat(char* dst, const char* src, size_t size) noexcept
     memcpy(dst + dstlen, src, srclen + 1);
     return dst;
 }
+#endif
 
 /***************************************************************************************************/
 class File
@@ -199,10 +220,8 @@ int main(int argc, char** argv)
 
     for (int i = 2; i < argc; i++)
     {
-        char name[1024];
-        strlcpy(name, argv[i], sizeof(name));
-        PathStripPathA(name);
-        outf.printf("    { \"%s\", zorroAsset%xSize, zorroAsset%x },\n", name, i, i);
+        const char* baseName = getBasename(argv[i]);
+        outf.printf("    { \"%s\", zorroAsset%xSize, zorroAsset%x },\n", baseName, i, i);
     }
 
     outf.printf("};\n");

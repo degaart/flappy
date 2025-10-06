@@ -66,18 +66,21 @@ if (ZORRO_ENGINE_SDL)
         SDL_VIRTUAL_JOYSTICK SDL_VULKAN SDL_WASAPI SDL_WAYLAND SDL_WERROR SDL_X11 SDL_XINPUT)
 endif()
 
-# GLM
-FetchContent_Declare(
-    glm
-    GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG bf71a834948186f4097caa076cd2663c69a10e1e
-    GIT_SHALLOW 1
-)
-FetchContent_MakeAvailable(glm)
-mark_as_advanced(FETCHCONTENT_SOURCE_DIR_GLM FETCHCONTENT_UPDATES_DISCONNECTED_GLM)
+### AssetPack
+include(ExternalProject)
 
-### Utilities
-add_subdirectory(assetPack)
+set(ASSETPACK_EXECUTABLE "${CMAKE_BINARY_DIR}/assetPack/assetPack${CMAKE_EXECUTABLE_SUFFIX}")
+ExternalProject_Add(assetPack
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/assetPack
+    BINARY_DIR ${CMAKE_BINARY_DIR}/assetPack
+    CMAKE_COMMAND ${CMAKE_COMMAND}
+    CMAKE_ARGS
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${CMAKE_BINARY_DIR}/assetPack
+        -DCMAKE_TOOLCHAIN_FILE=
+    BUILD_BYPRODUCTS "${ASSETPACK_EXECUTABLE}"
+    INSTALL_COMMAND ""
+)
 
 ### zorro engine
 add_subdirectory(engine)
@@ -98,7 +101,7 @@ set(ASSETS
 )
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp
-    COMMAND $<TARGET_FILE:assetPack> ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp ${ASSETS}
+    COMMAND ${ASSETPACK_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp ${ASSETS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS assetPack ${ASSETS}
     COMMENT "Generating ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp"
