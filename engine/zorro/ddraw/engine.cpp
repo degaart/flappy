@@ -72,7 +72,58 @@ void Engine::reloadBitmap(Bitmap* bmp)
         }
         break;
     case 16:
+        for (int y = 0; y < height; y++)
+        {
+            const uint8_t* srcPtr = data.data() + (y * width);
+            uint16_t* dstPtr = reinterpret_cast<uint16_t*>(static_cast<uint8_t*>(ddsd.lpSurface) + (y * ddsd.lPitch));
+            for (int x = 0; x < width; x++)
+            {
+                PALETTEENTRY c;
+                switch (*srcPtr)
+                {
+                case 0:
+                    c.peRed = c.peGreen = c.peBlue = 0;
+                    break;
+                case 255:
+                    c.peRed = c.peGreen = c.peBlue = 255;
+                    break;
+                default:
+                    c = _paletteEntries[*srcPtr];
+                    break;
+                }
+                *dstPtr = makeRGB(c.peRed, c.peGreen, c.peBlue);
+                srcPtr++;
+                dstPtr++;
+            }
+        }
+        break;
     case 24:
+        for (int y = 0; y < height; y++)
+        {
+            const uint8_t* srcPtr = data.data() + (y * width);
+            uint8_t* dstPtr = reinterpret_cast<uint8_t*>(static_cast<uint8_t*>(ddsd.lpSurface) + (y * ddsd.lPitch));
+            for (int x = 0; x < width; x++)
+            {
+                PALETTEENTRY c;
+                switch (*srcPtr)
+                {
+                case 0:
+                    c.peRed = c.peGreen = c.peBlue = 0;
+                    break;
+                case 255:
+                    c.peRed = c.peGreen = c.peBlue = 255;
+                    break;
+                default:
+                    c = _paletteEntries[*srcPtr];
+                    break;
+                }
+                *dstPtr++ = c.peBlue;
+                *dstPtr++ = c.peGreen;
+                *dstPtr++ = c.peRed;
+                srcPtr++;
+            }
+        }
+        break;
     case 32:
         for (int y = 0; y < height; y++)
         {
