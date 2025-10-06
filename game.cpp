@@ -25,7 +25,7 @@ bool Game::onInit(zorro::IEngine& engine)
     double now = engine.getTime();
     _rng.seed(*reinterpret_cast<uint64_t*>(&now));
 
-    auto palette = engine.loadPalette("doge.pal");
+    auto palette = engine.loadPalette("game.pal");
     engine.setPalette(palette);
 
     _tiles1._bitmap = engine.loadBitmap("tiles1.bmp");
@@ -292,9 +292,9 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
     // Generate bird hitbox
     zorro::Rect<float> birdHitbox;
     birdHitbox.x = game._pos.x + 1;
-    birdHitbox.y = game._pos.y + 1;
+    birdHitbox.y = game._pos.y + 5;
     birdHitbox.w = game._tiles1._images[0].w - 2;
-    birdHitbox.h = game._tiles1._images[0].h - 2;
+    birdHitbox.h = game._tiles1._images[0].h - 7;
 
     for (auto it = game._pipes.begin(), next_it = game._pipes.begin(); it != game._pipes.end(); it = next_it)
     {
