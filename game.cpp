@@ -263,7 +263,7 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
 {
     if (engine.getKeyState(zorro::KeyID::Space).down || engine.getKeyState(zorro::KeyID::MouseLeft).down)
     {
-        if (game._vel > 10.0f)
+        if (game._vel > 10.0f && game._pos.y > game._tiles1._images[0].h * 2)
         {
             game._vel = -110.0f;
 
