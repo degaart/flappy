@@ -76,9 +76,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glm)
 mark_as_advanced(FETCHCONTENT_SOURCE_DIR_GLM FETCHCONTENT_UPDATES_DISCONNECTED_GLM)
 
-### utility executables
-add_subdirectory(convertPng)
-
 ### zorro engine
 add_subdirectory(engine)
 
