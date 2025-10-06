@@ -73,49 +73,33 @@ struct BMPInfoHeader
 };
 #pragma pack(pop)
 
-std::vector<uint8_t> zorro::loadBmp(const char* filename, int* width, int* height)
+std::vector<uint8_t> zorro::loadBmp(const char* tag, const void* buffer, size_t size, int* width, int* height)
 {
-    FILE* f = fopen(filename, "rb");
-    if (!f)
+    const uint8_t* ptr = static_cast<const uint8_t*>(buffer);
+    const BMPFileHeader* fileHeader = reinterpret_cast<const BMPFileHeader*>(ptr);
+    ptr += sizeof(BMPFileHeader);
+
+    const BMPInfoHeader* infoHeader = reinterpret_cast<const BMPInfoHeader*>(ptr);
+    ptr += sizeof(BMPInfoHeader);
+
+    if (fileHeader->bfType != 0x4D42 || infoHeader->biBitCount != 8)
     {
-        panic("Failed to open file %s", filename);
+        panic("Invalid pixel format: %s", tag);
     }
 
-    BMPFileHeader fileHeader;
-    BMPInfoHeader infoHeader;
-
-    if (fread(&fileHeader, sizeof(fileHeader), 1, f) != 1 || fread(&infoHeader, sizeof(infoHeader), 1, f) != 1)
-    {
-        fclose(f);
-        panic("Invalid BMP file: %s", filename);
-    }
-
-    if (fileHeader.bfType != 0x4D42 || infoHeader.biBitCount != 8)
-    {
-        fclose(f);
-        panic("Invalid pixel format: %s", filename);
-    }
-
-    *width = infoHeader.biWidth;
-    *height = infoHeader.biHeight;
+    *width = infoHeader->biWidth;
+    *height = infoHeader->biHeight;
     size_t rowSize = ((*width + 3) & ~3);
     size_t dataSize = rowSize * *height;
 
-    size_t paletteSize = (infoHeader.biClrUsed ? infoHeader.biClrUsed : 256) * 4;
-    fseek(f, sizeof(BMPFileHeader) + infoHeader.biSize + paletteSize, SEEK_SET);
+    size_t paletteSize = (infoHeader->biClrUsed ? infoHeader->biClrUsed : 256) * 4;
 
-    std::vector<uint8_t> data(dataSize);
-    if (fread(data.data(), 1, dataSize, f) != dataSize)
-    {
-        fclose(f);
-        panic("Failed to read pixel data: %s", filename);
-    }
-    fclose(f);
+    ptr = reinterpret_cast<const uint8_t*>(buffer) + sizeof(BMPFileHeader) + infoHeader->biSize + paletteSize;
 
     std::vector<uint8_t> pixels(*width * *height);
     for (int y = 0; y < *height; ++y)
     {
-        std::copy_n(&data[y * rowSize], *width, &pixels[(*height - 1 - y) * *width]);
+        std::copy_n(&ptr[y * rowSize], *width, &pixels[(*height - 1 - y) * *width]);
     }
     return pixels;
 }

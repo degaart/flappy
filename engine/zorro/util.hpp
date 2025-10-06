@@ -13,6 +13,7 @@ namespace zorro
     void __panic(const char* file, int line, const char* format, ...);
     void __trace(const char* file, int line, const char* format, ...);
     std::vector<uint8_t> loadBmp(const char* filename, int* width, int* height);
+    std::vector<uint8_t> loadBmp(const char* tag, const void* buffer, size_t size, int* width, int* height);
 }
 
 #define panic(...) zorro::__panic(__FILE__,__LINE__, __VA_ARGS__)

@@ -31,8 +31,11 @@ namespace zorro
         void blt(int dstX, int dstY,
                  int srcX, int srcY, int srcWidth, int srcHeight,
                  int colorKey) override;
+        const char* tag() const override;
 
-        std::string _filename;
+        const void* _data;
+        size_t _dataSize;
+
         LPDIRECTDRAWSURFACE4 _surface;
         DDSURFACEDESC2 _ddsd;
         LPDIRECTDRAWSURFACE4 _dstSurf;
@@ -41,6 +44,7 @@ namespace zorro
         int _bpp;
         const PixelFormat* _pixelFormat;
         PALETTEENTRY* _palette;
+        std::string _tag;
     };
 
     struct Sfx : ISfx
@@ -48,16 +52,20 @@ namespace zorro
         void setFreq(int freq) override;
         void play() override;
         void stop() override;
+        const char* tag() const override;
 
         LPDIRECTSOUNDBUFFER _sndBuf;
+        std::string _tag;
     };
 
     struct Palette : IPalette
     {
         int colorCount() const override;
         Color<uint8_t> colorAt(int index) const override;
+        const char* tag() const override;
 
         std::vector<Color<uint8_t>> _colors;
+        std::string _tag;
     };
 
     struct Engine : public IEngine
@@ -70,13 +78,13 @@ namespace zorro
         Engine& operator=(const Engine&) = delete;
 
         /* Lifetime is managed by engine */
-        IBitmap* loadBitmap(const char* filename) override;
+        IBitmap* loadBitmap(const char* tag, const void* data, size_t size) override;
 
         /* Lifetime is managed by engine */
-        ISfx* loadSfx(const char* filename) override;
+        ISfx* loadSfx(const char* tag, const void* data, size_t size) override;
 
         /* Lifetime is managed by engine */
-        IPalette* loadPalette(const char* filename) override;
+        IPalette* loadPalette(const char* tag, const void* data, size_t size) override;
 
         void clearScreen(uint8_t color) override;
         void setDebugText(const char* debugText) override;

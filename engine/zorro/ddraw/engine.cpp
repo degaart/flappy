@@ -5,6 +5,7 @@
 #include <zorro/IGame.hpp>
 #include <zorro/stb_sprintf.h>
 #include <zorro/util.hpp>
+#include <zorro/BufferView.hpp>
 
 #define STB_VORBIS_HEADER_ONLY
 #include <zorro/stb_vorbis.c>
@@ -37,10 +38,8 @@ Engine::Engine(HINSTANCE hInstance)
 
 void Engine::reloadBitmap(Bitmap* bmp)
 {
-    trace("Loading %s", bmp->_filename.c_str());
-
     int width, height;
-    std::vector<uint8_t> data = zorro::loadBmp(bmp->_filename.c_str(), &width, &height);
+    std::vector<uint8_t> data = zorro::loadBmp(bmp->_tag.c_str(), bmp->_data, bmp->_dataSize, &width, &height);
 
     auto surf = createOffscreenSurface(width, height);
 
@@ -117,35 +116,36 @@ void Engine::reloadBitmap(Bitmap* bmp)
     bmp->_palette = _paletteEntries;
 }
 
-IBitmap* Engine::loadBitmap(const char* filename)
+IBitmap* Engine::loadBitmap(const char* tag, const void* data, size_t size)
 {
     auto bmp = std::make_unique<Bitmap>();
     auto result = bmp.get();
-    bmp->_filename = filename;
+    bmp->_data = data;
+    bmp->_dataSize = size;
+    bmp->_tag = tag;
     reloadBitmap(result);
 
     _bitmaps.push_back(std::move(bmp));
     return result;
 }
 
-ISfx* Engine::loadSfx(const char* filename)
+ISfx* Engine::loadSfx(const char* tag, const void* data, size_t size)
 {
-    trace("Loading %s", filename);
-
     int channels, sampleRate;
     int16_t* samples;
-    auto sampleCount = stb_vorbis_decode_filename(filename, &channels, &sampleRate, &samples);
+    auto sampleCount = stb_vorbis_decode_memory(static_cast<const unsigned char*>(data), size, &channels, &sampleRate, &samples);
+
     if (sampleCount == -1)
     {
-        panic("Failed to decode %s", filename);
+        panic("Failed to decode %s", tag);
     }
     if (sampleRate != 22050)
     {
-        panic("Unsupported samplerate for %s: %d", filename, sampleRate);
+        panic("Unsupported samplerate for %s: %d", tag, sampleRate);
     }
     else if (channels != 1)
     {
-        panic("Unsupported number of channels for %s: %d", filename, channels);
+        panic("Unsupported number of channels for %s: %d", tag, channels);
     }
 
     WAVEFORMATEX wfe;
@@ -180,48 +180,25 @@ ISfx* Engine::loadSfx(const char* filename)
     auto sfx = std::make_unique<Sfx>();
     auto result = sfx.get();
     sfx->_sndBuf = sndBuf;
+    sfx->_tag = tag;
     _sfxs.push_back(std::move(sfx));
     return result;
 }
 
-IPalette* Engine::loadPalette(const char* filename)
+IPalette* Engine::loadPalette(const char* tag, const void* data, size_t size)
 {
-    trace("Loading %s", filename);
-
-    FILE* f = fopen(filename, "rt");
-    if (!f)
+    zorro::BufferView paletteBuffer(data, size);
+    if (auto header = paletteBuffer.readLine(); !header || *header != "JASC-PAL")
     {
-        panic("Failed to load file %s", filename);
+        panic("Invalid header (magic) for %s", tag);
     }
-
-    auto getLine = [f]() -> std::optional<std::string>
+    else if (auto version = paletteBuffer.readLine(); !version || *version != "0100")
     {
-        char buffer[512];
-        if (!fgets(buffer, sizeof(buffer), f))
-        {
-            return std::nullopt;
-        }
-
-        std::string result(buffer);
-        while (!result.empty() && (result.back() == '\r' || result.back() == '\n'))
-        {
-            result.pop_back();
-        }
-
-        return result;
-    };
-
-    if (auto header = getLine(); !header || *header != "JASC-PAL")
-    {
-        panic("Invalid header (magic) for %s", filename);
+        panic("Invalid header (version) for %s", tag);
     }
-    else if (auto version = getLine(); !version || *version != "0100")
+    else if (auto version = paletteBuffer.readLine(); !version || *version != "256")
     {
-        panic("Invalid header (version) for %s", filename);
-    }
-    else if (auto version = getLine(); !version || *version != "256")
-    {
-        panic("Invalid header (colorcount) for %s", filename);
+        panic("Invalid header (colorcount) for %s", tag);
     }
 
     auto palette = std::make_unique<Palette>();
@@ -229,34 +206,34 @@ IPalette* Engine::loadPalette(const char* filename)
     palette->_colors.reserve(256);
     for (int i = 0; i < 256; i++)
     {
-        auto line = getLine();
+        auto line = paletteBuffer.readLine();
         if (!line)
         {
-            panic("Failed to read entry %d in %s", i, filename);
+            panic("Failed to read entry %d in %s", i, tag);
         }
 
         auto tokens = split(*line, " ");
         if (tokens.size() != 3)
         {
-            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+            panic("Invalid entry format \"%.*s\" in %s", line->size(), line->data(), tag);
         }
 
         auto r = parseInt(tokens[0], 10);
         if (!r)
         {
-            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+            panic("Invalid entry format \"%.*s\" in %s", line->size(), line->data(), tag);
         }
 
         auto g = parseInt(tokens[1], 10);
         if (!g)
         {
-            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+            panic("Invalid entry format \"%.*s\" in %s", line->size(), line->data(), tag);
         }
 
         auto b = parseInt(tokens[2], 10);
         if (!b)
         {
-            panic("Invalid entry format \"%s\" in %s", line->c_str(), filename);
+            panic("Invalid entry format \"%.*$s\" in %s", line->size(), line->data(), tag);
         }
 
         Color<uint8_t> color;

@@ -1,6 +1,7 @@
 #include "game.hpp"
 
 #include <assert.h>
+#include <assets.hpp>
 #include <cmath>
 #include <windows.h>
 #include <zorro/stb_sprintf.h>
@@ -25,31 +26,40 @@ bool Game::onInit(zorro::IEngine& engine)
     double now = engine.getTime();
     _rng.seed(*reinterpret_cast<uint64_t*>(&now));
 
-    auto palette = engine.loadPalette("game.pal");
+    auto paletteBuf = loadAsset("game.pal");
+    auto palette = engine.loadPalette("game.pal", paletteBuf.data(), paletteBuf.size());
     engine.setPalette(palette);
 
-    _tiles1._bitmap = engine.loadBitmap("tiles1.bmp");
+    auto tiles1Buf = loadAsset("tiles1.bmp");
+    _tiles1._bitmap = engine.loadBitmap("tiles1.bmp", tiles1Buf.data(), tiles1Buf.size());
     _tiles1.addImage(0, 0, 34, 24);
     _tiles1.addImage(34, 0, 34, 24);
     _tiles1.addImage(68, 0, 34, 24);
     _tiles1._colorKey = 195;
 
-    _background = engine.loadBitmap("background.bmp");
+    auto backgroundBuf = loadAsset("background.bmp");
+    _background = engine.loadBitmap("background.bmp", backgroundBuf.data(), backgroundBuf.size());
 
-    _ground = engine.loadBitmap("ground.bmp");
+    auto groundBuf = loadAsset("ground.bmp");
+    _ground = engine.loadBitmap("ground.bmp", groundBuf.data(), groundBuf.size());
     _groundY = SCREEN_HEIGHT - _ground->height();
 
-    _tiles2._bitmap = engine.loadBitmap("pipes.bmp");
+    auto pipesBuf = loadAsset("pipes.bmp");
+    _tiles2._bitmap = engine.loadBitmap("pipes.bmp", pipesBuf.data(), pipesBuf.size());
     _tiles2._colorKey = 195;
     _tiles2.addImage(0, 0, _tiles2._bitmap->width() / 2, _tiles2._bitmap->height());
     _tiles2.addImage(_tiles2._bitmap->width() / 2, 0, _tiles2._bitmap->width() / 2, _tiles2._bitmap->height());
 
-    _gameOver = engine.loadBitmap("gameover.bmp");
+    auto gameOverBuf = loadAsset("gameover.bmp");
+    _gameOver = engine.loadBitmap("gameover.bmp", gameOverBuf.data(), gameOverBuf.size());
     _gameOverVisible = false;
-    _message = engine.loadBitmap("message.bmp");
+
+    auto messageBuf = loadAsset("message.bmp");
+    _message = engine.loadBitmap("message.bmp", messageBuf.data(), messageBuf.size());
     _messageVisible = false;
 
-    _numbers._bitmap = engine.loadBitmap("numbers.bmp");
+    auto numbersBuf = loadAsset("numbers.bmp");
+    _numbers._bitmap = engine.loadBitmap("numbers.bmp", numbersBuf.data(), numbersBuf.size());
     _numbers._colorKey = 195;
 
     zorro::Size<int> numberSize;
@@ -64,9 +74,14 @@ bool Game::onInit(zorro::IEngine& engine)
         }
     }
 
-    _wingSfx = engine.loadSfx("wing.ogg");
-    _dieSfx = engine.loadSfx("die.ogg");
-    _pointSfx = engine.loadSfx("point.ogg");
+    auto wingBuf = loadAsset("wing.ogg");
+    _wingSfx = engine.loadSfx("wing.ogg", wingBuf.data(), wingBuf.size());
+
+    auto dieBuf = loadAsset("die.ogg");
+    _dieSfx = engine.loadSfx("die.ogg", dieBuf.data(), dieBuf.size());
+
+    auto pointBuf = loadAsset("point.ogg");
+    _pointSfx = engine.loadSfx("point.ogg", pointBuf.data(), pointBuf.size());
 
     _score = 0;
 
@@ -199,6 +214,20 @@ void Game::setState(zorro::IEngine& engine, IState* newState)
 {
     _nextState = newState;
 }
+
+zorro::BufferView Game::loadAsset(const char* name)
+{
+    for (const ZorroAsset* asset = zorroAssets; asset->name; asset++)
+    {
+        if (!strcmp(asset->name, name))
+        {
+            return zorro::BufferView(asset->data, asset->size);
+        }
+    }
+    panic("Asset not found: %s", name);
+    return zorro::BufferView(nullptr, 0);
+}
+
 
 zorro::IGame* zorro::makeGame()
 {

@@ -3,6 +3,7 @@
 #include <zorro/IEngine.hpp>
 #include <zorro/IGame.hpp>
 #include <zorro/rng.hpp>
+#include <zorro/BufferView.hpp>
 #include <vector>
 #include <list>
 
@@ -111,5 +112,6 @@ private:
     float rand(float min, float max);
     static bool checkCollision(const zorro::Rect<float>& a, const zorro::Rect<float>& b);
     void setState(zorro::IEngine& engine, IState* newState);
+    static zorro::BufferView loadAsset(const char* name);
 };
 

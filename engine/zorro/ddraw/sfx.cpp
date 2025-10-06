@@ -17,3 +17,8 @@ void Sfx::stop()
     REPORT(_sndBuf->Stop());
 }
 
+const char* Sfx::tag() const
+{
+    return _tag.c_str();
+}
+

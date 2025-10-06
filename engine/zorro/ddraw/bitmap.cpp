@@ -131,3 +131,8 @@ void Bitmap::blt(
     CHECK(_dstSurf->Blt(&dstRect, _surface, &srcRect, flags, &fx));
 }
 
+const char* Bitmap::tag() const
+{
+    return _tag.c_str();
+}
+

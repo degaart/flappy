@@ -41,6 +41,7 @@ namespace zorro
         virtual void blt(int dstX, int dstY,
                          int srcX, int srcY, int srcWidth, int srcHeight,
                          int colorKey = -1) = 0;
+        virtual const char* tag() const = 0;
     };
 
     struct ISfx
@@ -49,6 +50,7 @@ namespace zorro
         virtual void setFreq(int freq) = 0;
         virtual void play() = 0;
         virtual void stop() = 0;
+        virtual const char* tag() const = 0;
     };
 
     struct IPalette
@@ -56,6 +58,7 @@ namespace zorro
         virtual ~IPalette() = default;
         virtual int colorCount() const = 0;
         virtual Color<uint8_t> colorAt(int index) const = 0;
+        virtual const char* tag() const = 0;
     };
 
     enum class KeyID
@@ -79,12 +82,24 @@ namespace zorro
     struct IEngine
     {
         virtual ~IEngine() = default;
-        /* Lifetime is managed by engine */
-        virtual IBitmap* loadBitmap(const char* filename) = 0;
-        /* Lifetime is managed by engine */
-        virtual ISfx* loadSfx(const char* filename) = 0;
-        /* Lifetime is managed by engine */
-        virtual IPalette* loadPalette(const char* filename) = 0;
+        /* 
+         * Lifetime is managed by engine
+         * The buffer should be valid for the lifetime of the engine
+         */
+        virtual IBitmap* loadBitmap(const char* tag, const void* data, size_t size) = 0;
+
+        /*
+         * Lifetime is managed by engine
+         * The buffer should be valid for the lifetime of the engine
+         */
+        virtual ISfx* loadSfx(const char* tag, const void* data, size_t size) = 0;
+
+        /*
+         * Lifetime is managed by engine
+         * The buffer should be valid for the lifetime of the engine
+         */
+        virtual IPalette* loadPalette(const char* tag, const void* data, size_t size) = 0;
+
         virtual void clearScreen(uint8_t color) = 0;
         virtual void setDebugText(const char* debugText) = 0;
         virtual KeyState getKeyState(KeyID key) const = 0;

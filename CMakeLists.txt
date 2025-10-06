@@ -76,15 +76,42 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glm)
 mark_as_advanced(FETCHCONTENT_SOURCE_DIR_GLM FETCHCONTENT_UPDATES_DISCONNECTED_GLM)
 
+### Utilities
+add_subdirectory(assetPack)
+
 ### zorro engine
 add_subdirectory(engine)
+
+### Generate assets.hpp
+set(ASSETS
+    background.bmp
+    gameover.bmp
+    ground.bmp
+    message.bmp
+    numbers.bmp
+    pipes.bmp
+    tiles1.bmp
+    die.ogg
+    point.ogg
+    wing.ogg
+    game.pal
+)
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp
+    COMMAND $<TARGET_FILE:assetPack> ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp ${ASSETS}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    DEPENDS assetPack ${ASSETS}
+    COMMENT "Generating ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp"
+    VERBATIM
+)
 
 ### executable
 file(GLOB SRC_FILES *.cpp *.c)
 file(GLOB HDR_FILES *.hpp *.h)
+list(APPEND HDR_FILES ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp)
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES} ${HDR_FILES})
 target_link_libraries(${PROJECT_NAME} PUBLIC zorro)
-
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # ### executable
 # file(GLOB SOURCE_FILES *.cpp *.c)
