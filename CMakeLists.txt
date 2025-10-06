@@ -8,6 +8,9 @@ cmake_policy(SET CMP0135 NEW)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+message(STATUS "WIN32: ${WIN32}")
+message(STATUS "CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_NAME}")
+
 # Disable exceptions and RTTI
 if (MSVC) # or MSVC to be specific
 	# turn off RTTI and Exceptions (including in STL)
@@ -69,7 +72,7 @@ endif()
 ### AssetPack
 include(ExternalProject)
 
-set(ASSETPACK_EXECUTABLE "${CMAKE_BINARY_DIR}/assetPack/assetPack${CMAKE_EXECUTABLE_SUFFIX}")
+set(ASSETPACK_EXECUTABLE "${CMAKE_BINARY_DIR}/assetPack/assetPack${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 ExternalProject_Add(assetPack
     SOURCE_DIR ${CMAKE_SOURCE_DIR}/assetPack
     BINARY_DIR ${CMAKE_BINARY_DIR}/assetPack
@@ -112,7 +115,7 @@ add_custom_command(
 file(GLOB SRC_FILES *.cpp *.c)
 file(GLOB HDR_FILES *.hpp *.h)
 list(APPEND HDR_FILES ${CMAKE_CURRENT_BINARY_DIR}/assets.hpp)
-add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES} ${HDR_FILES})
+add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES} ${HDR_FILES} resource.rc)
 target_link_libraries(${PROJECT_NAME} PUBLIC zorro)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 

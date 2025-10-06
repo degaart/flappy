@@ -405,7 +405,7 @@ int Engine::run()
     wc.cbSize = sizeof(wc);
     wc.hInstance = _hInstance;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hIcon = LoadIcon(nullptr, IDI_WINLOGO);
+    wc.hIcon = LoadIcon(_hInstance, MAKEINTRESOURCE(101));
     wc.hIconSm = wc.hIcon;
     wc.hbrBackground = nullptr;
     wc.lpfnWndProc = Engine::windowProc;
