@@ -402,7 +402,6 @@ int Engine::run()
         return 1;
     }
 
-
     createSurfaces();
 
     CHECK(DirectSoundCreate(nullptr, &_dsound, nullptr));
@@ -417,6 +416,12 @@ int Engine::run()
 
     UpdateWindow(hwnd);
     ShowWindow(hwnd, SW_SHOWDEFAULT);
+
+#ifdef _NDEBUG
+    _showFps = false;
+#else
+    _showDebugText = true;
+#endif
 
     double prevTime = 0.0;
     double lag = 0;
@@ -587,23 +592,23 @@ void Engine::render()
         _primarySurf->Restore();
     }
 
-    stbsp_snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
-    if (!_debugText.empty())
+    if (_showDebugText)
     {
-        auto currentLen = strlen(debugText);
-        if (currentLen < sizeof(debugText))
+        stbsp_snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
+        if (!_debugText.empty())
         {
-            stbsp_snprintf(debugText + currentLen, sizeof(debugText) - currentLen, " %s", _debugText.c_str());
+            auto currentLen = strlen(debugText);
+            if (currentLen < sizeof(debugText))
+            {
+                stbsp_snprintf(debugText + currentLen, sizeof(debugText) - currentLen, " %s", _debugText.c_str());
+            }
         }
+        HDC hdc;
+        CHECK(_backSurf->GetDC(&hdc));
+        SetTextColor(hdc, RGB(255, 0, 0));
+        TextOut(hdc, 0, 0, debugText, lstrlen(debugText));
+        _backSurf->ReleaseDC(hdc);
     }
-
-#if 1
-    HDC hdc;
-    CHECK(_backSurf->GetDC(&hdc));
-    SetTextColor(hdc, RGB(255, 0, 0));
-    TextOut(hdc, 0, 0, debugText, lstrlen(debugText));
-    _backSurf->ReleaseDC(hdc);
-#endif
 
     if (_fullscreen)
     {
@@ -717,6 +722,9 @@ std::optional<LRESULT> Engine::onEvent(UINT msg, WPARAM wparam, LPARAM lparam)
                 _zoom++;
             }
             createSurfaces();
+            break;
+        case VK_F8:
+            _showDebugText = !_showDebugText;
             break;
         case VK_LEFT:
         case VK_RIGHT:

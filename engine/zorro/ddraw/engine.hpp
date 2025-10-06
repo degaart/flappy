@@ -105,6 +105,7 @@ namespace zorro
         std::vector<std::unique_ptr<ISfx>> _sfxs;
         std::vector<std::unique_ptr<IPalette>> _palettes;
         std::string _debugText;
+        bool _showDebugText;
 
         LPDIRECTDRAW4 _ddraw;
         LPDIRECTDRAWSURFACE4 _primarySurf;
