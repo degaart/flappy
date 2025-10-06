@@ -741,6 +741,12 @@ std::optional<LRESULT> Engine::onEvent(UINT msg, WPARAM wparam, LPARAM lparam)
             break;
         }
         break;
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_RBUTTONUP:
+        onMouseEvent(msg);
+        break;
     case WM_MOUSEWHEEL:
         if (int zDelta = static_cast<short>(HIWORD(wparam)) / WHEEL_DELTA; zDelta > 0)
         {
@@ -823,6 +829,47 @@ void Engine::onKeyDown(int vk)
     {
         _keyState[keyID].down = true;
         _keyState[keyID].repeat = false;
+    }
+    else
+    {
+        it->second.repeat = it->second.down;
+        it->second.down = true;
+    }
+}
+
+void Engine::onMouseEvent(int msg)
+{
+    KeyID keyId;
+    bool up = false;
+    switch (msg)
+    {
+    case WM_LBUTTONUP:
+        keyId = KeyID::MouseLeft;
+        up = true;
+        break;
+    case WM_LBUTTONDOWN:
+        keyId = KeyID::MouseLeft;
+        break;
+    case WM_RBUTTONUP:
+        keyId = KeyID::MouseRight;
+        up = true;
+        break;
+    case WM_RBUTTONDOWN:
+        keyId = KeyID::MouseRight;
+        break;
+    }
+
+    auto it = _keyState.find(keyId);
+    if (it == _keyState.end())
+    {
+        _keyState.insert(std::make_pair(keyId, KeyState { false, false }));
+    }
+
+    it = _keyState.find(keyId);
+    if (up)
+    {
+        it->second.down = false;
+        it->second.repeat = false;
     }
     else
     {
@@ -1210,4 +1257,5 @@ LPDIRECTDRAWSURFACE4 Engine::createOffscreenSurface(int width, int height)
     }
     return surf;
 }
+
 

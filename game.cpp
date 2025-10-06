@@ -60,11 +60,7 @@ bool Game::onInit(zorro::IEngine& engine)
     {
         for (int i = 0; i < 5; i++)
         {
-            _numbers.addImage(
-                    i * numberSize.width, 
-                    j * numberSize.height, 
-                    numberSize.width, 
-                    numberSize.height);
+            _numbers.addImage(i * numberSize.width, j * numberSize.height, numberSize.width, numberSize.height);
         }
     }
 
@@ -181,7 +177,7 @@ bool Game::onRender(zorro::IEngine& engine, double lag)
     stbsp_snprintf(scoreBuffer, sizeof(scoreBuffer), "%d", _score);
     int scoreLen = strlen(scoreBuffer);
     int scoreX = SCREEN_WIDTH - _numbers._images[0].w - 2;
-    for (const char* p = &scoreBuffer[scoreLen-1]; p >= scoreBuffer; p--)
+    for (const char* p = &scoreBuffer[scoreLen - 1]; p >= scoreBuffer; p--)
     {
         _numbers.blt(scoreX, 4, *p - '0');
         scoreX -= _numbers._images[0].w + 2;
@@ -225,7 +221,6 @@ void SpriteSheet::addImage(int x, int y, int w, int h)
     _images.push_back(rect);
 }
 
-
 void IdleState::onEnter(zorro::IEngine& engine, class Game& game)
 {
     game._messageVisible = true;
@@ -243,7 +238,17 @@ void IdleState::onEnter(zorro::IEngine& engine, class Game& game)
 
 void IdleState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
 {
+    bool nextState = false;
     if (auto state = engine.getKeyState(zorro::KeyID::Space); state.down && !state.repeat)
+    {
+        nextState = true;
+    }
+    else if (auto state = engine.getKeyState(zorro::KeyID::MouseLeft); state.down && !state.repeat)
+    {
+        nextState = true;
+    }
+
+    if (nextState)
     {
         game._messageVisible = false;
         game.setState(engine, &Game::_runningState);
@@ -256,7 +261,7 @@ void RunningState::onEnter(zorro::IEngine& engine, class Game& game)
 
 void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
 {
-    if (engine.getKeyState(zorro::KeyID::Space).down)
+    if (engine.getKeyState(zorro::KeyID::Space).down || engine.getKeyState(zorro::KeyID::MouseLeft).down)
     {
         if (game._vel > 10.0f)
         {

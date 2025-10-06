@@ -126,6 +126,7 @@ namespace zorro
         uint32_t makeRGB(uint8_t r, uint8_t g, uint8_t b);
         void onKeyUp(int vk);
         void onKeyDown(int vk);
+        void onMouseEvent(int msg);
         static PixelFormat makePixelFormat(const DDPIXELFORMAT* pf);
         void cleanup();
         void reloadBitmap(Bitmap* bitmap);

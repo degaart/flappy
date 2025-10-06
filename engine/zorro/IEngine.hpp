@@ -65,7 +65,9 @@ namespace zorro
         Up,
         Down,
         Space,
-        Escape
+        Escape,
+        MouseLeft,
+        MouseRight,
     };
 
     struct KeyState
