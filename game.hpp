@@ -82,6 +82,7 @@ private:
     bool _gameOverVisible;
     zorro::IBitmap* _message;
     bool _messageVisible;
+    SpriteSheet _numbers;
     float _accel;
     float _vel;
     zorro::Point<float> _pos;

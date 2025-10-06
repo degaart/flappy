@@ -49,9 +49,30 @@ bool Game::onInit(zorro::IEngine& engine)
     _message = engine.loadBitmap("message.bmp");
     _messageVisible = false;
 
+    _numbers._bitmap = engine.loadBitmap("numbers.bmp");
+    _numbers._colorKey = 195;
+
+    zorro::Size<int> numberSize;
+    numberSize.width = _numbers._bitmap->width() / 5;
+    numberSize.height = _numbers._bitmap->height() / 2;
+
+    for (int j = 0; j < 2; j++)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            _numbers.addImage(
+                    i * numberSize.width, 
+                    j * numberSize.height, 
+                    numberSize.width, 
+                    numberSize.height);
+        }
+    }
+
     _wingSfx = engine.loadSfx("wing.ogg");
     _dieSfx = engine.loadSfx("die.ogg");
     _pointSfx = engine.loadSfx("point.ogg");
+
+    _score = 0;
 
     _state = nullptr;
     _nextState = nullptr;
@@ -68,14 +89,21 @@ bool Game::onUpdate(zorro::IEngine& engine, double dT)
         return true;
     }
 
+    if (auto state = engine.getKeyState(zorro::KeyID::Left); state.down && !state.repeat)
+    {
+        if (_score > 0)
+            _score--;
+    }
+
+    if (auto state = engine.getKeyState(zorro::KeyID::Right); state.down && !state.repeat)
+    {
+        _score++;
+    }
+
     if (_state)
     {
         _state->onUpdate(engine, *this, dT);
     }
-
-    char debugText[64];
-    stbsp_snprintf(debugText, sizeof(debugText), "score=%d", _score);
-    engine.setDebugText(debugText);
 
     if (_nextState)
     {
@@ -147,6 +175,16 @@ bool Game::onRender(zorro::IEngine& engine, double lag)
         int x = (SCREEN_WIDTH - _message->width()) / 2;
         int y = (SCREEN_HEIGHT - _message->height()) / 2;
         _message->blt(x, y, 0, 0, _message->width(), _message->height(), 195);
+    }
+
+    char scoreBuffer[100];
+    stbsp_snprintf(scoreBuffer, sizeof(scoreBuffer), "%d", _score);
+    int scoreLen = strlen(scoreBuffer);
+    int scoreX = SCREEN_WIDTH - _numbers._images[0].w - 2;
+    for (const char* p = &scoreBuffer[scoreLen-1]; p >= scoreBuffer; p--)
+    {
+        _numbers.blt(scoreX, 4, *p - '0');
+        scoreX -= _numbers._images[0].w + 2;
     }
 
     return true;
