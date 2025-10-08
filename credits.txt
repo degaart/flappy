@@ -1,2 +1,7 @@
-- Sprites by kosresetr55 (https://kosresetr55.itch.io/flappy-bird-assets-by-kosresetr55)
+- Sprites and sfx: https://kosresetr55.itch.io/flappy-bird-assets-by-kosresetr55/
+- stb_image, stb_sprintf, stb_vorbis: https://nothings.org/
+- vc6_redist.zip by Microsoft
+- SDL3: https://libsdl.org/
+- mingw-w64: https://www.mingw-w64.org/
+- xoshiro512+: https://prng.di.unimi.it/
 
