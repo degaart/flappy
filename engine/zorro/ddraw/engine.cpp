@@ -183,6 +183,11 @@ IBitmap* Engine::loadBitmap(const char* tag, const void* data, size_t size)
 
 ISfx* Engine::loadSfx(const char* tag, const void* data, size_t size)
 {
+    if (!_dsound)
+    {
+        return nullptr;
+    }
+
     int channels, sampleRate;
     int16_t* samples;
     auto sampleCount = stb_vorbis_decode_memory(static_cast<const unsigned char*>(data), size, &channels, &sampleRate, &samples);
@@ -422,8 +427,11 @@ int Engine::run()
 
     createSurfaces();
 
-    CHECK(DirectSoundCreate(nullptr, &_dsound, nullptr));
-    CHECK(_dsound->SetCooperativeLevel(_hwnd, DSSCL_NORMAL));
+    REPORT(DirectSoundCreate(nullptr, &_dsound, nullptr));
+    if (_dsound)
+    {
+        CHECK(_dsound->SetCooperativeLevel(_hwnd, DSSCL_NORMAL));
+    }
 
     if (!_game->onInit(*this))
     {
@@ -488,8 +496,6 @@ int Engine::run()
                 frameTimer = 0;
                 frames = 0;
             }
-
-            _debugVal = _altDown;
 
             render();
             prevTime = beginTime;
@@ -614,7 +620,7 @@ void Engine::render()
 
     if (_showDebugText)
     {
-        stbsp_snprintf(debugText, sizeof(debugText), "fps=%d debug=0x%08X", _fps, _debugVal);
+        stbsp_snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
         if (!_debugText.empty())
         {
             auto currentLen = strlen(debugText);

@@ -114,7 +114,6 @@ namespace zorro
         std::vector<std::unique_ptr<IPalette>> _palettes;
         std::string _debugText;
         bool _showDebugText;
-        uint32_t _debugVal;
         bool _altDown;
 
         LPDIRECTDRAW4 _ddraw;

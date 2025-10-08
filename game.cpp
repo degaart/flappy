@@ -296,10 +296,13 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
         {
             game._vel = -110.0f;
 
-            float modulation = game._rng.fnext() - 0.5f; /* 0.0f to 1.0f */
-            int freq = 22050 + round(11025 * modulation);
-            game._wingSfx->setFreq(freq);
-            game._wingSfx->play();
+            if (game._wingSfx)
+            {
+                float modulation = game._rng.fnext() - 0.5f; /* 0.0f to 1.0f */
+                int freq = 22050 + round(11025 * modulation);
+                game._wingSfx->setFreq(freq);
+                game._wingSfx->play();
+            }
         }
     }
 
@@ -340,10 +343,13 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
             it->counted = true;
             game._score++;
 
-            float modulation = game._rng.fnext() - 0.5f; /* 0.0f to 1.0f */
-            int freq = 22050 + round(11025 * modulation);
-            game._pointSfx->setFreq(freq);
-            game._pointSfx->play();
+            if (game._pointSfx)
+            {
+                float modulation = game._rng.fnext() - 0.5f; /* 0.0f to 1.0f */
+                int freq = 22050 + round(11025 * modulation);
+                game._pointSfx->setFreq(freq);
+                game._pointSfx->play();
+            }
         }
         else
         {
@@ -405,7 +411,10 @@ void RunningState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
 void GameOverState::onEnter(zorro::IEngine& engine, class Game& game)
 {
     _timer = 3.0f;
-    game._dieSfx->play();
+    if (game._dieSfx)
+    {
+        game._dieSfx->play();
+    }
 }
 
 void GameOverState::onUpdate(zorro::IEngine& engine, class Game& game, double dT)
