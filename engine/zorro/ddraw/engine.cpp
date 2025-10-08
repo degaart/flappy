@@ -27,7 +27,8 @@ Engine::Engine(HINSTANCE hInstance)
       _ddraw(nullptr),
       _primarySurf(nullptr),
       _backSurf(nullptr),
-      _dsound(nullptr)
+      _dsound(nullptr),
+      _altDown(false)
 {
     LARGE_INTEGER freq;
     QueryPerformanceFrequency(&freq);
@@ -434,8 +435,8 @@ int Engine::run()
     UpdateWindow(hwnd);
     ShowWindow(hwnd, SW_SHOWDEFAULT);
 
-#ifdef _NDEBUG
-    _showFps = false;
+#ifdef NDEBUG
+    _showDebugText = false;
 #else
     _showDebugText = true;
 #endif
@@ -487,6 +488,8 @@ int Engine::run()
                 frameTimer = 0;
                 frames = 0;
             }
+
+            _debugVal = _altDown;
 
             render();
             prevTime = beginTime;
@@ -611,7 +614,7 @@ void Engine::render()
 
     if (_showDebugText)
     {
-        stbsp_snprintf(debugText, sizeof(debugText), "fps=%d", _fps);
+        stbsp_snprintf(debugText, sizeof(debugText), "fps=%d debug=0x%08X", _fps, _debugVal);
         if (!_debugText.empty())
         {
             auto currentLen = strlen(debugText);
@@ -715,10 +718,22 @@ std::optional<LRESULT> Engine::onEvent(UINT msg, WPARAM wparam, LPARAM lparam)
     case WM_ACTIVATE:
         _active = (LOWORD(wparam) != 0);
         return 0;
+    case WM_SYSKEYUP:
     case WM_KEYUP:
         switch (wparam)
         {
+        case VK_MENU:
+        case VK_LMENU:
+        case VK_RMENU:
+            _altDown = false;
+            return 0;
+        case VK_RETURN:
         case VK_F5:
+            if (wparam == VK_RETURN && !_altDown)
+            {
+                break;
+            }
+
             _fullscreen = !_fullscreen;
             if (!_fullscreen)
             {
@@ -753,9 +768,15 @@ std::optional<LRESULT> Engine::onEvent(UINT msg, WPARAM wparam, LPARAM lparam)
             break;
         }
         break;
+    case WM_SYSKEYDOWN:
     case WM_KEYDOWN:
         switch (wparam)
         {
+        case VK_MENU:
+        case VK_LMENU:
+        case VK_RMENU:
+            _altDown = true;
+            return 0;
         case VK_LEFT:
         case VK_RIGHT:
         case VK_UP:
