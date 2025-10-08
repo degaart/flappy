@@ -4,6 +4,9 @@ A very simple and stupid flappy bird game in C++ with no game engine.
 
 ![Screenshot](screenshot1.png)
 
+### Download link
+
+- [Download from github](https://github.com/degaart/flappy/releases/download/v1.0/Flappy-win95.zip)
 
 ### System requirements
 
