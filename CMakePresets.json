@@ -49,8 +49,23 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_WARN_DEPRECATED": "OFF",
                 "ZORRO_ENGINE": "ddraw",
-                "CMAKE_C_FLAGS": "-march=pentium -mtune=pentium -ffast-math -DWIN32_WINNT=0x0400 -DWINVER=0x0400",
-                "CMAKE_CXX_FLAGS": "-march=pentium -mtune=pentium -ffast-math -DWIN32_WINNT=0x0400 -DWINVER=0x0400",
+                "CMAKE_C_FLAGS": "-DWIN32_WINNT=0x0400 -DWINVER=0x0400 -D_WIN32_WINDOWS=0x0400 -D_WIN32_IE=0x0400",
+                "CMAKE_CXX_FLAGS": "-DWIN32_WINNT=0x0400 -DWINVER=0x0400 -D_WIN32_WINDOWS=0x0400 -D_WIN32_IE=0x0400",
+                "CMAKE_EXE_LINKER_FLAGS": "-s"
+            }
+        },
+        {
+            "name": "win95 release",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "toolchainFile": "mingw-w64.toolchain",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_WARN_DEPRECATED": "OFF",
+                "ZORRO_ENGINE": "ddraw",
+                "CMAKE_C_FLAGS": "-march=pentium -mtune=pentium -ffast-math -DWIN32_WINNT=0x0400 -DWINVER=0x0400 -D_WIN32_WINDOWS=0x0400 -D_WIN32_IE=0x0400",
+                "CMAKE_CXX_FLAGS": "-march=pentium -mtune=pentium -ffast-math -DWIN32_WINNT=0x0400 -DWINVER=0x0400 -D_WIN32_WINDOWS=0x0400 -D_WIN32_IE=0x0400",
                 "CMAKE_EXE_LINKER_FLAGS": "-s"
             }
         },
