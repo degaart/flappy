@@ -2,6 +2,9 @@
 
 A very simple and stupid flappy bird game in C++ with no game engine.
 
+![Screenshot](screenshot1.png)
+
+
 ### System requirements
 
 - Intel Pentium 90Mhz
@@ -12,8 +15,9 @@ A very simple and stupid flappy bird game in C++ with no game engine.
 
 ### Keys
 
-- Flap/start game: SPACE/Mouse Left
-- Zoom in: F6/Mouse wheel up
-- Zoom out: F7/Mouse wheel down
-- Fullscreen: Alt+Enter/F5
+- Flap/start game: SPACE or Mouse Left
+- Zoom out: F6 or Mouse wheel up
+- Zoom in: F7 or Mouse wheel down
+- Fullscreen: ALT+ENTER or F5
+- Exit: ESCAPE
 
