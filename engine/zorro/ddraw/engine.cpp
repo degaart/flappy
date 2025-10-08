@@ -212,8 +212,8 @@ ISfx* Engine::loadSfx(const char* tag, const void* data, size_t size)
     DSBUFFERDESC dsbd;
     memset(&dsbd, 0, sizeof(dsbd));
     dsbd.dwSize = sizeof(dsbd);
-    dsbd.dwFlags = DSBCAPS_CTRLVOLUME | DSBCAPS_CTRLFREQUENCY | DSBCAPS_STATIC | DSBCAPS_LOCSOFTWARE;
-    dsbd.dwBufferBytes = sampleCount * sizeof(int8_t); /* 2 secs at sample rate 11025 */
+    dsbd.dwFlags = DSBCAPS_CTRLFREQUENCY | DSBCAPS_STATIC;
+    dsbd.dwBufferBytes = (sampleCount * wfe.nBlockAlign + 1) & ~1; /* 2 secs at sample rate 11025 */
     dsbd.lpwfxFormat = &wfe;
 
     LPDIRECTSOUNDBUFFER sndBuf;
@@ -224,6 +224,9 @@ ISfx* Engine::loadSfx(const char* tag, const void* data, size_t size)
     void* audioPtr2;
     unsigned long audioBytes2;
     CHECK(sndBuf->Lock(0, dsbd.dwBufferBytes, &audioPtr1, &audioBytes1, &audioPtr2, &audioBytes2, DSBLOCK_ENTIREBUFFER));
+
+    const int16_t* srcPtr = samples;
+    unsigned remainingSamples = sampleCount;
     memcpy(audioPtr1, samples, audioBytes1);
     CHECK(sndBuf->Unlock(audioPtr1, audioBytes1, audioPtr2, audioBytes2));
     free(samples);
@@ -385,20 +388,6 @@ int Engine::run()
     CHECK(ddraw->QueryInterface(IID_IDirectDraw4, (void**)&_ddraw));
     ddraw->Release();
     ddraw = nullptr;
-
-    DDSURFACEDESC2 ddsd;
-    ddsd.dwSize = sizeof(ddsd);
-    CHECK(_ddraw->GetDisplayMode(&ddsd));
-
-    _zoom = ddsd.dwWidth / _params.size.width;
-    if (ddsd.dwHeight / _params.size.height < _zoom)
-    {
-        _zoom = ddsd.dwHeight / _params.size.height;
-    }
-    if (_zoom < 1)
-    {
-        _zoom = 1;
-    }
 
     WNDCLASSEX wc;
     memset(&wc, 0, sizeof(wc));

@@ -119,6 +119,10 @@ add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES} ${HDR_FILES} resource.rc)
 target_link_libraries(${PROJECT_NAME} PUBLIC zorro)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
+if (MSVC)
+    target_link_options(${PROJECT_NAME} PRIVATE /MANIFEST:NO)
+endif()
+
 # ### executable
 # file(GLOB SOURCE_FILES *.cpp *.c)
 # file(GLOB HEADER_FILES *.hpp *.h)
