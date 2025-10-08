@@ -1,6 +1,8 @@
 - Fix game resolution to 320x240x8 so we can use Mode-X in the DOS version
 - No need to set palette of backbuffer and auxiliary surfaces: only the palette
     of the primary surface is used if we dont switch
+- IDirectDraw4 was introduced in DirectX 6
+- Need to define DIRECTSOUND_VERSION=0x0600 or the program will depend on DirectX 7
 
 Configure nvim
 ==============
@@ -25,8 +27,9 @@ TODO
 - Make window unresizeable [OK]
 - Add keys to zoom in and zoom out [OK]
 - Split git repo [OK]
-- Change palette so we don't use reserved colors (and change swatch)
+- Change palette so we don't use reserved colors (and change swatch) [OK]
 - Custom blit color key support [OK]
-- Implement surface abstraction so we can blit
+- Implement surface abstraction so we can blit [OK]
+
 
 
